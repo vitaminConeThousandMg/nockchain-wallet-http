@@ -1,0 +1,1583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NockOS 3.1</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+        
+        :root {
+            --desktop-bg-color: #008080;
+            --window-bg-color: #c0c0c0;
+            --window-border-light: #fff;
+            --window-border-dark: #000;
+            --titlebar-bg-start: #000080;
+            --titlebar-bg-end: #1084d0;
+            --titlebar-text-color: #fff;
+            --button-bg-color: #c0c0c0;
+            --button-border-light: #fff;
+            --button-border-dark: #000;
+            --input-bg-color: #fff;
+            --input-border-light: #fff;
+            --input-border-dark: #000;
+            --text-color: #000;
+            --highlight-bg: #000080;
+            --highlight-text: #fff;
+            --accent-color: #FFD700;
+            --status-bg-color: #c0c0c0;
+            --status-border-light: #fff;
+            --status-border-dark: #000;
+
+            /* Warhol specific */
+            --warhol-red: rgba(255,0,0,0.1);
+            --warhol-yellow: rgba(255,255,0,0.1);
+            --warhol-blue: rgba(0,0,255,0.1);
+        }
+
+        body.theme-warhol {
+            /* Desktop pattern is handled by ::before, colors here are for general elements */
+            --desktop-bg-color: #c0c0c0; /* Neutral for warhol pattern */
+            --titlebar-bg-start: #FF0000;
+            --titlebar-bg-end: #FFFF00;
+            --titlebar-text-color: #000;
+            --highlight-bg: #00FF00;
+            --highlight-text: #000;
+            --accent-color: #0000FF;
+            --button-bg-color: #FFC0CB; /* Pink */
+            --window-bg-color: #DDA0DD; /* Plum */
+            --input-bg-color: #EEE8AA; /* PaleGoldenrod */
+        }
+
+        body.theme-pastel {
+            --desktop-bg-color: #e0f2f7; /* Light Blue */
+            --window-bg-color: #f0f0e0; /* Light Beige */
+            --window-border-light: #ffffff;
+            --window-border-dark: #a0a090;
+            --titlebar-bg-start: #a7d9f2; /* Pastel Blue */
+            --titlebar-bg-end: #c7e9f7; /* Lighter Pastel Blue */
+            --titlebar-text-color: #333;
+            --button-bg-color: #d7e9e9; /* Light Cyan */
+            --button-border-light: #ffffff;
+            --button-border-dark: #b7c9c9;
+            --input-bg-color: #ffffff;
+            --input-border-light: #a0a090;
+            --input-border-dark: #e0e0d0;
+            --text-color: #555;
+            --highlight-bg: #b0e0e6; /* Powder Blue */
+            --highlight-text: #000;
+            --accent-color: #ffb3ba; /* Light Red */
+            --status-bg-color: #e0f2f7;
+            --status-border-light: #ffffff;
+            --status-border-dark: #a0a090;
+        }
+
+        body.theme-mono {
+            --desktop-bg-color: #333;
+            --window-bg-color: #c0c0c0;
+            --window-border-light: #ccc;
+            --window-border-dark: #666;
+            --titlebar-bg-start: #555;
+            --titlebar-bg-end: #777;
+            --titlebar-text-color: #eee;
+            --button-bg-color: #aaa;
+            --button-border-light: #ccc;
+            --button-border-dark: #666;
+            --input-bg-color: #eee;
+            --input-border-light: #666;
+            --input-border-dark: #ccc;
+            --text-color: #222;
+            --highlight-bg: #888;
+            --highlight-text: #fff;
+            --accent-color: #ccc;
+            --status-bg-color: #c0c0c0;
+            --status-border-light: #fff;
+            --status-border-dark: #000;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        
+        body {
+            font-family: 'VT323', monospace;
+            font-size: 16px;
+            background: var(--desktop-bg-color);
+            overflow: hidden;
+            cursor: default;
+            user-select: none;
+            height: 100vh;
+            position: relative;
+            color: var(--text-color);
+        }
+        
+        /* Windows 3.1 Desktop */
+        .desktop {
+            width: 100%;
+            height: 100vh;
+            position: relative;
+            background: var(--desktop-bg-color);
+            background-image: repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(255,255,255,.05) 35px, rgba(255,255,255,.05) 70px),
+                              repeating-linear-gradient(-45deg, transparent, transparent 35px, rgba(255,255,255,.05) 35px, rgba(255,255,255,.05) 70px);
+        }
+        
+        /* Warhol-style pattern overlay */
+        .desktop::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: radial-gradient(circle at 20% 80%, var(--warhol-red) 0%, transparent 50%),
+                              radial-gradient(circle at 80% 20%, var(--warhol-yellow) 0%, transparent 50%),
+                              radial-gradient(circle at 40% 40%, var(--warhol-blue) 0%, transparent 50%);
+            pointer-events: none;
+            opacity: 0; /* Hidden by default, activated by theme */
+        }
+
+        body.theme-warhol .desktop::before {
+            opacity: 0.3;
+            animation: warholShift 20s ease-in-out infinite;
+        }
+        
+        @keyframes warholShift {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.1); }
+        }
+        
+        /* Desktop Icons */
+        .desktop-icon {
+            position: absolute;
+            width: 64px;
+            text-align: center;
+            cursor: pointer;
+            padding: 8px;
+        }
+        
+        .desktop-icon:hover {
+            background: rgba(0,0,128,0.3);
+            outline: 1px dotted var(--highlight-text);
+        }
+        
+        .desktop-icon.selected {
+            background: rgba(0,0,128,0.5);
+            outline: 1px solid var(--highlight-text);
+        }
+        
+        .desktop-icon img {
+            width: 32px;
+            height: 32px;
+            margin-bottom: 4px;
+            filter: drop-shadow(1px 1px 0 rgba(0,0,0,0.5));
+        }
+        
+        .desktop-icon span {
+            color: var(--titlebar-text-color);
+            text-shadow: 1px 1px 0 #000;
+            font-size: 14px;
+            display: block;
+        }
+        
+        /* Windows */
+        .window {
+            position: absolute;
+            background: var(--window-bg-color);
+            border: 2px solid;
+            border-color: var(--window-border-light) var(--window-border-dark) var(--window-border-dark) var(--window-border-light);
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+            min-width: 300px;
+            min-height: 200px;
+            display: none;
+            resize: both; /* Enable resizing */
+            overflow: hidden; /* Hide scrollbars unless content needs it */
+        }
+        
+        .window.active {
+            z-index: 1000;
+        }
+        
+        .window-titlebar {
+            background: linear-gradient(to right, var(--titlebar-bg-start), var(--titlebar-bg-end));
+            color: var(--titlebar-text-color);
+            padding: 2px 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: grab; /* Indicate draggable */
+        }
+
+        .window-titlebar:active {
+            cursor: grabbing;
+        }
+        
+        .window-title {
+            font-weight: bold;
+            font-size: 14px;
+            flex-grow: 1;
+        }
+        
+        .window-controls {
+            display: flex;
+            gap: 2px;
+        }
+        
+        .window-button {
+            width: 16px;
+            height: 14px;
+            background: var(--button-bg-color);
+            border: 1px solid;
+            border-color: var(--button-border-light) var(--button-border-dark) var(--button-border-dark) var(--button-border-light);
+            cursor: pointer;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: var(--text-color);
+        }
+        
+        .window-button:active {
+            border-color: var(--button-border-dark) var(--button-border-light) var(--button-border-light) var(--button-border-dark);
+        }
+        
+        .window-menubar {
+            background: var(--window-bg-color);
+            border-bottom: 1px solid var(--window-border-dark);
+            padding: 2px 4px;
+            display: flex;
+            gap: 16px;
+        }
+        
+        .menu-item {
+            padding: 2px 8px;
+            cursor: pointer;
+        }
+        
+        .menu-item:hover {
+            background: var(--highlight-bg);
+            color: var(--highlight-text);
+        }
+        
+        .window-content {
+            padding: 8px;
+            background: var(--window-bg-color);
+            height: calc(100% - 44px); /* Adjusted for titlebar and menubar */
+            overflow: auto;
+        }
+        
+        /* Form Elements */
+        button, .button {
+            background: var(--button-bg-color);
+            border: 2px solid;
+            border-color: var(--button-border-light) var(--button-border-dark) var(--button-border-dark) var(--button-border-light);
+            padding: 4px 16px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 14px;
+            color: var(--text-color);
+        }
+        
+        button:active, .button:active {
+            border-color: var(--button-border-dark) var(--button-border-light) var(--button-border-light) var(--button-border-dark);
+        }
+        
+        input, textarea, select {
+            background: var(--input-bg-color);
+            border: 2px solid;
+            border-color: var(--input-border-dark) var(--input-border-light) var(--input-border-light) var(--input-border-dark);
+            padding: 4px;
+            font-family: inherit;
+            font-size: 14px;
+            color: var(--text-color);
+        }
+        
+        input:focus, textarea:focus, select:focus {
+            outline: 1px dotted var(--input-border-dark);
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 4px;
+        }
+        
+        .form-group {
+            margin-bottom: 12px;
+        }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid var(--input-border-dark);
+            margin-bottom: 8px;
+        }
+        
+        .tab {
+            background: var(--button-bg-color);
+            border: 2px solid;
+            border-color: var(--button-border-light) var(--button-border-dark) transparent var(--button-border-light);
+            padding: 4px 16px;
+            cursor: pointer;
+            margin-right: 2px;
+            position: relative;
+            top: 2px;
+        }
+        
+        .tab.active {
+            background: var(--window-bg-color);
+            border-bottom-color: var(--window-bg-color);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Status Bar */
+        .statusbar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 24px;
+            background: var(--status-bg-color);
+            border-top: 2px solid var(--status-border-light);
+            display: flex;
+            align-items: center;
+            padding: 0 4px;
+            z-index: 9999;
+            color: var(--text-color);
+        }
+        
+        .status-section {
+            border: 1px solid;
+            border-color: var(--status-border-dark) var(--status-border-light) var(--status-border-light) var(--status-border-dark);
+            padding: 2px 8px;
+            margin-right: 4px;
+            font-size: 14px;
+        }
+        
+        /* Wallet Specific Styles */
+        .wallet-balance {
+            background: var(--input-bg-color);
+            border: 2px solid;
+            border-color: var(--input-border-dark) var(--input-border-light) var(--input-border-light) var(--input-border-dark);
+            padding: 8px;
+            margin-bottom: 16px;
+            font-size: 20px;
+        }
+        
+        .notes-list {
+            background: var(--input-bg-color);
+            border: 2px solid;
+            border-color: var(--input-border-dark) var(--input-border-light) var(--input-border-light) var(--input-border-dark);
+            height: 200px;
+            overflow-y: scroll;
+            padding: 4px;
+        }
+        
+        .note-item {
+            padding: 4px;
+            border-bottom: 1px solid var(--window-bg-color);
+            font-size: 14px;
+        }
+        
+        .note-item:hover {
+            background: var(--highlight-bg);
+            color: var(--highlight-text);
+        }
+        
+        /* Explorer iframe */
+        .explorer-frame {
+            width: 100%;
+            height: 100%;
+            border: 2px solid;
+            border-color: var(--input-border-dark) var(--input-border-light) var(--input-border-light) var(--input-border-dark);
+            background: var(--input-bg-color);
+        }
+        
+        /* Settings Styles */
+        .theme-preview {
+            width: 100px;
+            height: 60px;
+            border: 2px solid;
+            border-color: var(--input-border-dark) var(--input-border-light) var(--input-border-light) var(--input-border-dark);
+            margin: 8px;
+            cursor: pointer;
+            position: relative;
+            display: inline-block;
+        }
+        
+        .theme-preview.selected {
+            outline: 2px solid var(--highlight-bg);
+            outline-offset: 2px;
+        }
+        
+        /* Crazy Mode */
+        body.crazy-mode {
+            animation: crazyColors 0.5s infinite;
+        }
+        
+        @keyframes crazyColors {
+            0% { filter: hue-rotate(0deg) saturate(2); }
+            100% { filter: hue-rotate(360deg) saturate(2); }
+        }
+        
+        body.crazy-mode .window {
+            animation: windowDance 2s ease-in-out infinite;
+        }
+        
+        @keyframes windowDance {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(1deg); }
+            75% { transform: rotate(-1deg); }
+        }
+        
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--input-border-dark);
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Message Box */
+        .msgbox {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--window-bg-color);
+            border: 2px solid;
+            border-color: var(--window-border-light) var(--window-border-dark) var(--window-border-dark) var(--window-border-light);
+            min-width: 300px;
+            z-index: 10000;
+            box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+            display: none; /* Hidden by default */
+        }
+        
+        .msgbox-content {
+            padding: 16px;
+            text-align: center;
+        }
+        
+        .msgbox-buttons {
+            padding: 8px;
+            text-align: center;
+            border-top: 1px solid var(--window-border-dark);
+        }
+    </style>
+</head>
+<body>
+    <div class="desktop" id="desktop">
+        <div class="desktop-icon" style="top: 20px; left: 20px;" data-program="wallet">
+            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='8' width='24' height='16' fill='%23FFD700' stroke='%23000' stroke-width='2'/%3E%3Crect x='8' y='12' width='16' height='8' fill='%23FFA500'/%3E%3Ccircle cx='20' cy='16' r='3' fill='%23000'/%3E%3C/svg%3E" alt="Wallet">
+            <span>Wallet</span>
+        </div>
+        
+        <div class="desktop-icon" style="top: 20px; left: 100px;" data-program="explorer">
+            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='6' y='6' width='20' height='20' fill='%230000FF' stroke='%23000' stroke-width='2'/%3E%3Cpath d='M10 10h12v2H10zM10 14h12v2H10zM10 18h8v2H10z' fill='%23FFF'/%3E%3C/svg%3E" alt="Explorer">
+            <span>Explorer</span>
+        </div>
+        
+        <div class="desktop-icon" style="top: 20px; left: 180px;" data-program="settings">
+            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 8l2 2-2 2-2-2z' fill='%23FF0000'/%3E%3Cpath d='M8 16l2 2-2 2-2-2z' fill='%23FFFF00'/%3E%3Cpath d='M24 16l2 2-2 2-2-2z' fill='%23FFFF00'/%3E%3Cpath d='M16 24l2 2-2 2-2-2z' fill='%23FF0000'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23808080' stroke='%23000' stroke-width='2'/%3E%3C/svg%3E" alt="Settings">
+            <span>Settings</span>
+        </div>
+        
+        <div class="window" id="wallet-window" style="left: 50px; top: 50px; width: 600px; height: 500px;">
+            <div class="window-titlebar">
+                <span class="window-title">NockWallet Manager v3.1 <span id="wallet-mode-indicator" style="color: var(--accent-color); font-size: 12px;"></span></span>
+                <div class="window-controls">
+                    <button class="window-button minimize">_</button>
+                    <button class="window-button maximize">□</button>
+                    <button class="window-button close">X</button>
+                </div>
+            </div>
+            <div class="window-menubar">
+                <span class="menu-item" onclick="walletManager.showConnectionInfo()">Connection</span>
+                <span class="menu-item" onclick="walletManager.showWalletInfo()">Wallet</span>
+                <span class="menu-item" onclick="walletManager.showTransactionInfo()">Transactions</span>
+                <span class="menu-item" onclick="walletManager.showHelpInfo()">Help</span>
+            </div>
+            <div class="window-content">
+                <div class="wallet-balance">
+                    <strong>Balance:</strong> <span id="balance">0.00</span> NOCK
+                </div>
+                
+                <div class="tabs">
+                    <div class="tab active" data-tab="send">Send</div>
+                    <div class="tab" data-tab="receive">Receive</div>
+                    <div class="tab" data-tab="notes">Notes</div>
+                    <div class="tab" data-tab="keys">Keys</div>
+                </div>
+                
+                <div class="tab-content active" id="send-tab">
+                    <h3>Send Transaction</h3>
+                    <div class="form-group">
+                        <label>Recipient Address:</label>
+                        <div style="display: flex; gap: 4px;">
+                            <input type="text" id="recipient" style="flex: 1;" placeholder="Enter recipient address">
+                            <button onclick="document.getElementById('recipient').value = walletManager.api.generateMockAddress()" title="Generate test address" style="padding: 4px 8px;">📋</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Amount:</label>
+                        <input type="number" id="amount" style="width: 200px;" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Fee:</label>
+                        <input type="number" id="fee" style="width: 100px;" value="10">
+                    </div>
+                    <div class="form-group">
+                        <label>Recipient Name (optional):</label>
+                        <input type="text" id="sender-first" style="width: 150px;" placeholder="First">
+                        <input type="text" id="sender-last" style="width: 150px;" placeholder="Last">
+                    </div>
+                    <button id="send-btn">Send Transaction</button>
+                </div>
+                
+                <div class="tab-content" id="receive-tab">
+                    <h3>Your Address</h3>
+                    <div style="background: var(--input-bg-color); border: 2px solid; border-color: var(--input-border-dark) var(--input-border-light) var(--input-border-light) var(--input-border-dark); padding: 8px; margin: 8px 0;">
+                        <code id="your-address" style="word-break: break-all; font-size: 12px;">Loading...</code>
+                    </div>
+                    <button id="copy-address">Copy Address</button>
+                    <div id="address-note" style="margin-top: 16px; padding: 8px; background: #ffffcc; border: 1px solid #cccc00; display: none;">
+                        <strong>ℹ️ Note:</strong> <span id="address-note-text"></span>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="notes-tab">
+                    <h3>Your Notes (UTXOs)</h3>
+                    <button id="refresh-notes">🔄 Refresh</button>
+                    <span id="notes-status" style="margin-left: 10px; font-size: 14px; color: #808080;"></span>
+                    <div class="notes-list" id="notes-list">
+                        <div class="note-item">Loading notes...</div>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="keys-tab">
+                    <h3>Key Management</h3>
+                    <button id="generate-keys">Generate New Keys</button>
+                    <button id="export-keys">Export Keys</button>
+                    <button id="import-keys">Import Keys</button>
+                    <div style="margin-top: 16px;">
+                        <label>Master Public Key:</label>
+                        <input type="text" id="master-pubkey" style="width: 100%;" readonly>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="window" id="explorer-window" style="left: 150px; top: 100px; width: 800px; height: 600px;">
+            <div class="window-titlebar">
+                <span class="window-title">NockBlocks Explorer</span>
+                <div class="window-controls">
+                    <button class="window-button minimize">_</button>
+                    <button class="window-button maximize">□</button>
+                    <button class="window-button close">X</button>
+                </div>
+            </div>
+            <div class="window-menubar">
+                <span class="menu-item">File</span>
+                <span class="menu-item">View</span>
+                <span class="menu-item">Navigate</span>
+                <span class="menu-item">Help</span>
+            </div>
+            <div class="window-content" style="padding: 0;">
+                <iframe src="https://nockblocks.com" class="explorer-frame" id="explorer-frame"></iframe>
+            </div>
+        </div>
+        
+        <div class="window" id="settings-window" style="left: 250px; top: 150px; width: 400px; height: 500px;">
+            <div class="window-titlebar">
+                <span class="window-title">Control Panel - Display</span>
+                <div class="window-controls">
+                    <button class="window-button minimize">_</button>
+                    <button class="window-button maximize">□</button>
+                    <button class="window-button close">X</button>
+                </div>
+            </div>
+            <div class="window-menubar">
+                <span class="menu-item" onclick="settingsManager.showTab('options-tab')">Options</span>
+                <span class="menu-item" onclick="settingsManager.showTab('themes-tab')">Themes</span>
+                <span class="menu-item" onclick="settingsManager.showTab('about-tab')">About</span>
+            </div>
+            <div class="window-content">
+                <div class="tab-content active" id="options-tab">
+                    <h3>General Settings</h3>
+                    <div style="margin-top: 20px;">
+                        <label>
+                            <input type="checkbox" id="animation-toggle"> Enable animations
+                        </label>
+                    </div>
+                    
+                    <div style="margin-top: 10px;">
+                        <label>
+                            <input type="checkbox" id="sound-toggle"> Enable sounds
+                        </label>
+                    </div>
+
+                    <div style="margin-top: 20px;">
+                        <button id="apply-settings">Apply</button>
+                        <button id="crazy-mode-btn" style="margin-left: 20px;">???</button>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="themes-tab">
+                    <h3>Visual Themes</h3>
+                    <div id="theme-previews" style="display: flex; flex-wrap: wrap;">
+                        <div class="theme-preview" data-theme="classic" style="background: #008080;"></div>
+                        <div class="theme-preview" data-theme="warhol" style="background: linear-gradient(45deg, #ff0000, #ffff00, #0000ff);"></div>
+                        <div class="theme-preview" data-theme="pastel" style="background: linear-gradient(45deg, #ffb3ba, #bae1ff, #ffffba);"></div>
+                        <div class="theme-preview" data-theme="mono" style="background: repeating-linear-gradient(45deg, #000, #000 10px, #fff 10px, #fff 20px);"></div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="about-tab">
+                    <h3>About NockOS 3.1</h3>
+                    <p>Version: 3.1.0</p>
+                    <p>Release Date: July 2025</p>
+                    <p style="margin-top: 10px;">This operating system simulation is powered by cutting-edge web technologies.</p>
+                    <p style="margin-top: 10px;">Inspired by classic interfaces and modern blockchain principles.</p>
+                </div>
+                
+                <hr style="margin: 20px 0; border: 1px solid #808080;">
+                
+                <h3>Connection Settings</h3>
+                <div class="form-group">
+                    <label>API Endpoint:</label>
+                    <input type="text" id="api-endpoint" style="width: 100%;">
+                </div>
+                <button id="test-connection">Test Connection</button>
+                <button id="save-connection">Save</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="statusbar">
+        <div class="status-section" id="status-time">12:00 AM</div>
+        <div class="status-section" id="status-network" style="color: 'red';">Network: Checking...</div>
+        <div class="status-section" id="status-block">Block: Loading...</div>
+        <div class="status-section" id="status-mode" style="display: none; background: var(--accent-color); color: var(--text-color);">MOCK MODE</div>
+    </div>
+
+    <div class="msgbox" id="message-box">
+        <div class="window-titlebar">
+            <span class="window-title" id="msgbox-title">Message</span>
+            <div class="window-controls">
+                <button class="window-button close">X</button>
+            </div>
+        </div>
+        <div class="msgbox-content" id="msgbox-content">
+            This is a message.
+        </div>
+        <div class="msgbox-buttons">
+            <button id="msgbox-ok">OK</button>
+        </div>
+    </div>
+
+    <script>
+        // Nockchain API Client Integration
+        class NockchainAPI {
+            constructor() {
+                this.apiBase = localStorage.getItem('nock_api_base') || 'http://localhost:3000';
+                this.privateKey = null;
+                this.publicKey = null;
+                this.connected = false;
+                this.useMockData = false;
+                this.mockBlockHeight = 156789;
+                this.mockTransactionCount = 0;
+                
+                // Start mock block generation
+                setInterval(() => {
+                    if (this.useMockData) {
+                        this.mockBlockHeight += Math.floor(Math.random() * 2) + 1;
+                    }
+                }, 30000); // New block every 30 seconds
+            }
+            
+            async connect() {
+                try {
+                    // First try real connection
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3000);
+                    
+                    const response = await fetch(`${this.apiBase}/health`, {
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
+                    
+                    if (response.ok) {
+                        this.connected = true;
+                        this.useMockData = false;
+                        const data = await response.json();
+                        return { success: true, data };
+                    }
+                    throw new Error('Not OK response');
+                } catch (err) {
+                    // Fall back to mock mode
+                    console.log('API not available, using mock data mode');
+                    this.connected = false;
+                    this.useMockData = true;
+                    return { 
+                        success: true, 
+                        data: { 
+                            status: 'ok (mock mode)', 
+                            walletPath: './mock-wallet/nockchain.sock',
+                            uptime: 1337
+                        } 
+                    };
+                }
+            }
+            
+            async getBlockchainInfo() {
+                if (this.useMockData) {
+                    return {
+                        height: { height: this.mockBlockHeight },
+                        tip: { 
+                            hash: this.generateMockHash(),
+                            height: this.mockBlockHeight,
+                            timestamp: Date.now()
+                        }
+                    };
+                }
+                
+                try {
+                    const [height, tip] = await Promise.all([
+                        fetch(`${this.apiBase}/blockchain/height`).then(r => r.json()),
+                        fetch(`${this.apiBase}/blockchain/tip`).then(r => r.json())
+                    ]);
+                    return { height: height.data, tip: tip.data };
+                } catch (err) {
+                    // Fall back to mock data
+                    this.useMockData = true;
+                    return this.getBlockchainInfo();
+                }
+            }
+            
+            generateMockHash() {
+                const chars = '0123456789abcdef';
+                let hash = '';
+                for (let i = 0; i < 64; i++) {
+                    hash += chars[Math.floor(Math.random() * chars.length)];
+                }
+                return hash;
+            }
+            
+            generateKeyPair() {
+                // Generate mock Ed25519 keypair for demo
+                const privateKey = new Uint8Array(32);
+                crypto.getRandomValues(privateKey);
+                
+                // In real implementation, use tweetnacl
+                this.privateKey = this.base58Encode(privateKey);
+                this.publicKey = this.generateMockAddress();
+                
+                return {
+                    privateKey: this.privateKey,
+                    publicKey: this.publicKey
+                };
+            }
+            
+            base58Encode(bytes) {
+                const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+                const encoded = [];
+                
+                for (let i = 0; i < bytes.length; i++) {
+                    encoded.push(ALPHABET[bytes[i] % ALPHABET.length]);
+                }
+                
+                return encoded.join('');
+            }
+            
+            generateMockAddress() {
+                const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+                let address = '2v1T';
+                for (let i = 0; i < 146; i++) {
+                    address += chars[Math.floor(Math.random() * chars.length)];
+                }
+                return address;
+            }
+            
+            async createSignedCommand(action, params) {
+                const command = {
+                    action,
+                    params,
+                    timestamp: Math.floor(Date.now() / 1000),
+                    nonce: Math.random().toString(36).substr(2, 9)
+                };
+                
+                // Mock signature for demo
+                const mockSig = this.base58Encode(crypto.getRandomValues(new Uint8Array(64)));
+                
+                return {
+                    msg: JSON.stringify(command),
+                    sig: mockSig,
+                    publicKey: this.publicKey || this.generateMockAddress()
+                };
+            }
+            
+            async sendCommand(action, params) {
+                if (this.useMockData) {
+                    // Simulate command execution with mock data
+                    await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
+                    
+                    switch (action) {
+                        case 'list-notes':
+                            return {
+                                success: true,
+                                output: this.generateMockNotesOutput()
+                            };
+                        
+                        case 'simple-spend':
+                            this.mockTransactionCount++;
+                            // Simulate more realistic processing time for transactions
+                            await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+                            return {
+                                success: true,
+                                output: `Draft created: draft_${Date.now()}.draft\nTransaction signed\nTransaction sent with ID: ${this.generateMockHash().substring(0, 16)}`
+                            };
+                        
+                        default:
+                            return { success: false, error: 'Unknown command' };
+                    }
+                }
+                
+                const signedCommand = await this.createSignedCommand(action, params);
+                
+                try {
+                    const response = await fetch(`${this.apiBase}/send`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(signedCommand)
+                    });
+                    
+                    const result = await response.json();
+                    return result;
+                } catch (err) {
+                    // Fall back to mock mode
+                    this.useMockData = true;
+                    return this.sendCommand(action, params);
+                }
+            }
+            
+            generateMockNotesOutput() {
+                const mockNotes = [
+                    { assets: 420.69, first: 'Satoshi', last: 'Nakamoto', coinbase: false },
+                    { assets: 1337.00, first: 'Vitalik', last: 'Buterin', coinbase: false },
+                    { assets: 888.88, first: 'System', last: 'Reward', coinbase: true },
+                    { assets: 100.00, first: 'Test', last: 'Transaction', coinbase: false },
+                    { assets: 50.00, first: 'Mining', last: 'Reward', coinbase: true },
+                    { assets: 256.00, first: 'Alice', last: 'Wonderland', coinbase: false },
+                    { assets: 512.00, first: 'Bob', last: 'Builder', coinbase: false },
+                    { assets: 1024.00, first: 'Charlie', last: 'Chaplin', coinbase: false }
+                ];
+                
+                // Randomly select 2-5 notes
+                const numNotes = 2 + Math.floor(Math.random() * 4);
+                const selectedNotes = mockNotes
+                    .sort(() => Math.random() - 0.5)
+                    .slice(0, numNotes)
+                    .map(note => ({
+                        ...note,
+                        // Randomize amounts slightly for variety
+                        assets: Math.round((note.assets * (0.8 + Math.random() * 0.4)) * 100) / 100
+                    }));
+                
+                // Generate mock output in the expected format
+                return selectedNotes.map(note => `
+details
+    name: [first='${note.first}' last='${note.last}']
+    assets: ${note.assets}
+    source: [p=[[${this.generateMockAddress().substring(0, 44)} ${this.generateMockAddress().substring(0, 44)}]] is-coinbase=${note.coinbase ? '%.y' : '%.n'}]
+    lock
+        m: 1
+        signers: [m=1 pks=<|${this.generateMockAddress()}|>]
+                `).join('\n');
+            }
+            
+            async listNotes() {
+                return this.sendCommand('list-notes', {});
+            }
+            
+            async simpleSpend(recipients, gifts, names, fee) {
+                return this.sendCommand('simple-spend', {
+                    recipients,
+                    gifts,
+                    names,
+                    fee
+                });
+            }
+        }
+        
+        // Message Box System
+        class MessageBox {
+            constructor() {
+                this.msgBox = document.getElementById('message-box');
+                this.msgBoxTitle = document.getElementById('msgbox-title');
+                this.msgBoxContent = document.getElementById('msgbox-content');
+                this.msgBoxOkBtn = document.getElementById('msgbox-ok');
+                
+                this.msgBox.querySelector('.window-controls .close').addEventListener('click', () => this.hide());
+                this.msgBoxOkBtn.addEventListener('click', () => this.hide());
+            }
+
+            show(title, message) {
+                this.msgBoxTitle.textContent = title;
+                this.msgBoxContent.innerHTML = message;
+                this.msgBox.style.display = 'block';
+                // Bring to front
+                this.msgBox.style.zIndex = parseInt(windowManager.activeWindow?.style.zIndex || 1000) + 1;
+            }
+
+            hide() {
+                this.msgBox.style.display = 'none';
+            }
+        }
+
+        const messageBox = new MessageBox();
+
+        // Theme Management System
+        class ThemeManager {
+            constructor() {
+                this.currentTheme = localStorage.getItem('nock_theme') || 'classic';
+                this.applyTheme(this.currentTheme);
+                this.initThemePreviews();
+            }
+
+            applyTheme(themeName) {
+                const body = document.body;
+                // Remove all theme classes first
+                body.classList.remove('theme-classic', 'theme-warhol', 'theme-pastel', 'theme-mono');
+                // Add the new theme class
+                body.classList.add(`theme-${themeName}`);
+                this.currentTheme = themeName;
+                localStorage.setItem('nock_theme', themeName);
+                this.updateThemePreviewSelection();
+            }
+
+            initThemePreviews() {
+                document.querySelectorAll('.theme-preview').forEach(preview => {
+                    preview.addEventListener('click', () => {
+                        const theme = preview.dataset.theme;
+                        this.applyTheme(theme);
+                    });
+                });
+                this.updateThemePreviewSelection();
+            }
+
+            updateThemePreviewSelection() {
+                document.querySelectorAll('.theme-preview').forEach(preview => {
+                    if (preview.dataset.theme === this.currentTheme) {
+                        preview.classList.add('selected');
+                    } else {
+                        preview.classList.remove('selected');
+                    }
+                });
+            }
+        }
+
+        // Window Management System
+        class WindowManager {
+            constructor() {
+                this.windows = document.querySelectorAll('.window');
+                this.activeWindow = null;
+                this.zIndexCounter = 100; // Starting z-index for windows
+                this.draggedWindow = null;
+                this.dragOffset = { x: 0, y: 0 };
+                
+                this.init();
+                window.addEventListener('resize', this.constrainWindowsToViewport.bind(this));
+            }
+            
+            init() {
+                // Desktop icon clicks
+                document.querySelectorAll('.desktop-icon').forEach(icon => {
+                    icon.addEventListener('dblclick', () => {
+                        const program = icon.dataset.program;
+                        const windowElement = document.getElementById(`${program}-window`);
+                        if (windowElement) {
+                            this.openWindow(windowElement);
+                        }
+                    });
+
+                    icon.addEventListener('mousedown', (e) => {
+                        document.querySelectorAll('.desktop-icon').forEach(otherIcon => {
+                            otherIcon.classList.remove('selected');
+                        });
+                        icon.classList.add('selected');
+                        e.stopPropagation(); // Prevent deselecting icon if clicking on desktop
+                    });
+                });
+
+                document.getElementById('desktop').addEventListener('mousedown', () => {
+                    document.querySelectorAll('.desktop-icon').forEach(icon => {
+                        icon.classList.remove('selected');
+                    });
+                });
+        
+                // Window interactions
+                this.windows.forEach(windowElement => {
+                    // Make window draggable
+                    const titlebar = windowElement.querySelector('.window-titlebar');
+                    titlebar.addEventListener('mousedown', (e) => this.startDrag(e, windowElement));
+        
+                    // Control buttons
+                    windowElement.querySelector('.window-button.close').addEventListener('click', () => this.closeWindow(windowElement));
+                    windowElement.querySelector('.window-button.minimize').addEventListener('click', () => this.minimizeWindow(windowElement));
+                    windowElement.querySelector('.window-button.maximize').addEventListener('click', () => this.maximizeRestoreWindow(windowElement));
+        
+                    // Activate window on click
+                    windowElement.addEventListener('mousedown', () => this.activateWindow(windowElement));
+                });
+        
+                // Global mousemove and mouseup for dragging
+                document.addEventListener('mousemove', (e) => this.drag(e));
+                document.addEventListener('mouseup', () => this.endDrag());
+
+                // Tabs inside windows
+                document.querySelectorAll('.window .tabs .tab').forEach(tab => {
+                    tab.addEventListener('click', (event) => {
+                        const clickedTab = event.target;
+                        const windowContent = clickedTab.closest('.window-content');
+                        const tabId = clickedTab.dataset.tab;
+
+                        // Deactivate all tabs and their content in the current window
+                        windowContent.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                        windowContent.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+
+                        // Activate the clicked tab and its content
+                        clickedTab.classList.add('active');
+                        document.getElementById(`${tabId}-tab`).classList.add('active');
+                    });
+                });
+            }
+        
+            openWindow(windowElement) {
+                windowElement.style.display = 'block';
+                this.activateWindow(windowElement);
+                this.constrainWindow(windowElement); // Constrain on open
+            }
+        
+            closeWindow(windowElement) {
+                windowElement.style.display = 'none';
+                if (this.activeWindow === windowElement) {
+                    this.activeWindow = null;
+                }
+            }
+        
+            minimizeWindow(windowElement) {
+                // For simplicity, hide the window. In a real OS, it would go to a taskbar.
+                windowElement.style.display = 'none';
+                if (this.activeWindow === windowElement) {
+                    this.activeWindow = null;
+                }
+            }
+        
+            maximizeRestoreWindow(windowElement) {
+                if (windowElement.classList.contains('maximized')) {
+                    // Restore
+                    windowElement.style.width = windowElement._originalWidth || '600px';
+                    windowElement.style.height = windowElement._originalHeight || '500px';
+                    windowElement.style.left = windowElement._originalLeft || '50px';
+                    windowElement.style.top = windowElement._originalTop || '50px';
+                    windowElement.classList.remove('maximized');
+                    windowElement.querySelector('.window-button.maximize').textContent = '□';
+                    windowElement.style.resize = 'both'; // Enable resize
+                } else {
+                    // Maximize
+                    windowElement._originalWidth = windowElement.style.width;
+                    windowElement._originalHeight = windowElement.style.height;
+                    windowElement._originalLeft = windowElement.style.left;
+                    windowElement._originalTop = windowElement.style.top;
+        
+                    windowElement.style.width = '100%';
+                    windowElement.style.height = 'calc(100vh - 24px)'; // Account for status bar
+                    windowElement.style.left = '0';
+                    windowElement.style.top = '0';
+                    windowElement.classList.add('maximized');
+                    windowElement.querySelector('.window-button.maximize').textContent = '■';
+                    windowElement.style.resize = 'none'; // Disable resize when maximized
+                }
+                this.constrainWindow(windowElement); // Ensure it fits after maximize/restore
+            }
+        
+            activateWindow(windowElement) {
+                if (this.activeWindow) {
+                    this.activeWindow.classList.remove('active');
+                }
+                this.activeWindow = windowElement;
+                this.activeWindow.classList.add('active');
+                this.zIndexCounter++;
+                this.activeWindow.style.zIndex = this.zIndexCounter;
+            }
+        
+            startDrag(e, windowElement) {
+                if (windowElement.classList.contains('maximized')) return; // Prevent dragging maximized windows
+                this.draggedWindow = windowElement;
+                this.dragOffset.x = e.clientX - windowElement.getBoundingClientRect().left;
+                this.dragOffset.y = e.clientY - windowElement.getBoundingClientRect().top;
+                this.activateWindow(windowElement);
+                e.preventDefault(); // Prevent default browser drag behavior
+            }
+        
+            drag(e) {
+                if (this.draggedWindow) {
+                    let newLeft = e.clientX - this.dragOffset.x;
+                    let newTop = e.clientY - this.dragOffset.y;
+        
+                    // Constrain to viewport
+                    newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - this.draggedWindow.offsetWidth));
+                    newTop = Math.max(0, Math.min(newTop, window.innerHeight - this.draggedWindow.offsetHeight - 24)); // Account for status bar
+        
+                    this.draggedWindow.style.left = `${newLeft}px`;
+                    this.draggedWindow.style.top = `${newTop}px`;
+                }
+            }
+        
+            endDrag() {
+                this.draggedWindow = null;
+            }
+
+            constrainWindow(windowElement) {
+                const rect = windowElement.getBoundingClientRect();
+                let { left, top, width, height } = rect;
+
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight - 24; // Account for status bar
+
+                // Constrain width
+                if (width > viewportWidth) {
+                    width = viewportWidth;
+                    windowElement.style.width = `${width}px`;
+                }
+                // Constrain height
+                if (height > viewportHeight) {
+                    height = viewportHeight;
+                    windowElement.style.height = `${height}px`;
+                }
+
+                // Constrain left position
+                if (left < 0) {
+                    left = 0;
+                } else if (left + width > viewportWidth) {
+                    left = viewportWidth - width;
+                }
+                // Constrain top position
+                if (top < 0) {
+                    top = 0;
+                } else if (top + height > viewportHeight) {
+                    top = viewportHeight - height;
+                }
+                
+                windowElement.style.left = `${left}px`;
+                windowElement.style.top = `${top}px`;
+            }
+
+            constrainWindowsToViewport() {
+                this.windows.forEach(windowElement => {
+                    if (windowElement.style.display !== 'none' && !windowElement.classList.contains('maximized')) {
+                        this.constrainWindow(windowElement);
+                    }
+                });
+            }
+        }
+        
+        // Wallet Management System
+        class WalletManager {
+            constructor(api) {
+                this.api = api;
+                this.initUI();
+                this.updateWalletInfo();
+            }
+        
+            initUI() {
+                document.getElementById('send-btn').addEventListener('click', () => this.sendTransaction());
+                document.getElementById('copy-address').addEventListener('click', () => this.copyAddress());
+                document.getElementById('refresh-notes').addEventListener('click', () => this.listNotes());
+                document.getElementById('generate-keys').addEventListener('click', () => this.generateKeys());
+                document.getElementById('export-keys').addEventListener('click', () => this.exportKeys());
+                document.getElementById('import-keys').addEventListener('click', () => this.importKeys());
+            }
+        
+            async updateWalletInfo() {
+                const balance = parseFloat(localStorage.getItem('nock_balance') || '0.00');
+                document.getElementById('balance').textContent = balance.toFixed(2);
+                document.getElementById('your-address').textContent = this.api.publicKey || this.api.generateMockAddress();
+                await this.listNotes();
+
+                const modeIndicator = document.getElementById('wallet-mode-indicator');
+                if (this.api.useMockData) {
+                    modeIndicator.textContent = '[MOCK MODE]';
+                } else {
+                    modeIndicator.textContent = '';
+                }
+            }
+
+            async sendTransaction() {
+                const recipient = document.getElementById('recipient').value;
+                const amount = parseFloat(document.getElementById('amount').value);
+                const fee = parseFloat(document.getElementById('fee').value);
+                const senderFirst = document.getElementById('sender-first').value;
+                const senderLast = document.getElementById('sender-last').value;
+
+                if (!recipient || isNaN(amount) || amount <= 0 || isNaN(fee) || fee < 0) {
+                    messageBox.show('Error', 'Please enter a valid recipient, amount, and fee.');
+                    return;
+                }
+
+                const totalCost = amount + fee;
+                let currentBalance = parseFloat(document.getElementById('balance').textContent);
+
+                if (totalCost > currentBalance) {
+                    messageBox.show('Error', `Insufficient funds. You need ${totalCost.toFixed(2)} NOCK but have ${currentBalance.toFixed(2)} NOCK.`);
+                    return;
+                }
+
+                messageBox.show('Transaction', `Sending ${amount.toFixed(2)} NOCK to ${recipient}... <div class="loading" style="margin-left: 10px;"></div>`);
+
+                const result = await this.api.simpleSpend(
+                    [{ address: recipient, amount: amount }],
+                    [], // gifts
+                    [{ first: senderFirst, last: senderLast }], // names
+                    fee
+                );
+
+                if (result.success) {
+                    currentBalance -= totalCost;
+                    localStorage.setItem('nock_balance', currentBalance.toFixed(2));
+                    this.updateWalletInfo();
+                    document.getElementById('recipient').value = '';
+                    document.getElementById('amount').value = '';
+                    messageBox.show('Success', `Transaction sent! ID: ${result.output.split('ID: ')[1] || 'N/A'}`);
+                } else {
+                    messageBox.show('Error', `Transaction failed: ${result.error || 'Unknown error.'}`);
+                }
+            }
+        
+            async listNotes() {
+                document.getElementById('notes-status').textContent = 'Loading...';
+                const notesListElement = document.getElementById('notes-list');
+                notesListElement.innerHTML = '<div class="note-item">Loading notes... <div class="loading"></div></div>';
+                
+                const result = await this.api.listNotes();
+                
+                notesListElement.innerHTML = '';
+                let totalBalance = 0;
+        
+                if (result.success && result.output) {
+                    const notes = this.parseNotesOutput(result.output);
+                    if (notes.length > 0) {
+                        notes.forEach(note => {
+                            const noteItem = document.createElement('div');
+                            noteItem.classList.add('note-item');
+                            noteItem.textContent = `Amount: ${note.assets} NOCK, From: ${note.first} ${note.last || ''} ${note.coinbase ? '(Coinbase)' : ''}`;
+                            notesListElement.appendChild(noteItem);
+                            totalBalance += note.assets;
+                        });
+                        document.getElementById('notes-status').textContent = `${notes.length} notes found.`;
+                    } else {
+                        notesListElement.innerHTML = '<div class="note-item">No notes found.</div>';
+                        document.getElementById('notes-status').textContent = '0 notes found.';
+                    }
+                } else {
+                    notesListElement.innerHTML = '<div class="note-item">Failed to load notes. ' + (result.error || '') + '</div>';
+                    document.getElementById('notes-status').textContent = 'Error loading notes.';
+                }
+                localStorage.setItem('nock_balance', totalBalance.toFixed(2));
+                document.getElementById('balance').textContent = totalBalance.toFixed(2);
+            }
+        
+            parseNotesOutput(output) {
+                const notes = [];
+                const regex = /details\s+name: \[first='(.*?)'(?:\s+last='(.*?)')?\]\s+assets: (\d+\.?\d*)\s+source: \[.*?is-coinbase=(%.y|%.n)\]/g;
+                let match;
+                while ((match = regex.exec(output)) !== null) {
+                    notes.push({
+                        first: match[1],
+                        last: match[2] || '',
+                        assets: parseFloat(match[3]),
+                        coinbase: match[4] === '%.y'
+                    });
+                }
+                return notes;
+            }
+
+            copyAddress() {
+                const address = document.getElementById('your-address').textContent;
+                navigator.clipboard.writeText(address).then(() => {
+                    const noteElement = document.getElementById('address-note');
+                    document.getElementById('address-note-text').textContent = 'Address copied to clipboard!';
+                    noteElement.style.display = 'block';
+                    setTimeout(() => noteElement.style.display = 'none', 3000);
+                }).catch(err => {
+                    console.error('Failed to copy address: ', err);
+                    messageBox.show('Error', 'Failed to copy address. Please try again.');
+                });
+            }
+
+            generateKeys() {
+                const keys = this.api.generateKeyPair();
+                document.getElementById('master-pubkey').value = keys.publicKey;
+                localStorage.setItem('nock_private_key', keys.privateKey);
+                localStorage.setItem('nock_public_key', keys.publicKey);
+                this.updateWalletInfo();
+                messageBox.show('Key Generation', 'New keys generated and saved locally.');
+            }
+
+            exportKeys() {
+                const privateKey = localStorage.getItem('nock_private_key');
+                if (privateKey) {
+                    // In a real app, this would be a secure download
+                    const blob = new Blob([privateKey], { type: 'text/plain' });
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = 'nockos_private_key.txt';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    messageBox.show('Export Keys', 'Your private key has been downloaded. Keep it safe!');
+                } else {
+                    messageBox.show('Export Keys', 'No keys to export. Generate new ones first.');
+                }
+            }
+
+            importKeys() {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.txt';
+                input.onchange = async (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        try {
+                            const privateKey = await file.text();
+                            // Basic validation for mock keys
+                            if (privateKey.length > 50 && privateKey.startsWith('1')) { // Mock base58 starts with 1
+                                localStorage.setItem('nock_private_key', privateKey);
+                                // For mock, public key is derived, or generated. For real, it'd be from the private key.
+                                this.api.privateKey = privateKey;
+                                this.api.publicKey = this.api.generateMockAddress(); // Or derive from privateKey
+                                localStorage.setItem('nock_public_key', this.api.publicKey);
+                                document.getElementById('master-pubkey').value = this.api.publicKey;
+                                this.updateWalletInfo();
+                                messageBox.show('Import Keys', 'Keys imported successfully!');
+                            } else {
+                                messageBox.show('Error', 'Invalid key format. Please ensure it\'s a valid Nockchain private key.');
+                            }
+                        } catch (err) {
+                            messageBox.show('Error', 'Failed to read file: ' + err.message);
+                        }
+                    }
+                };
+                input.click();
+            }
+
+            showConnectionInfo() {
+                const status = this.api.connected ? 'Connected to Nockchain Node.' : 'Running in Mock Data Mode. API node not found.';
+                const endpoint = this.api.apiBase;
+                messageBox.show('Connection Info', `<strong>Status:</strong> ${status}<br><strong>API Endpoint:</strong> ${endpoint}`);
+            }
+
+            showWalletInfo() {
+                const balance = document.getElementById('balance').textContent;
+                const address = document.getElementById('your-address').textContent;
+                messageBox.show('Wallet Information', `<strong>Current Balance:</strong> ${balance} NOCK<br><strong>Your Address:</strong> <br><code style="word-break: break-all;">${address}</code>`);
+            }
+
+            showTransactionInfo() {
+                const transactions = this.api.mockTransactionCount; // Using mock count
+                messageBox.show('Transaction History', `<strong>Total Mock Transactions:</strong> ${transactions}<br><em>(Full transaction history requires API integration)</em>`);
+            }
+
+            showHelpInfo() {
+                messageBox.show('Help', 'Welcome to NockOS 3.1 Wallet Manager! Use the tabs to send/receive NOCK, view your notes, and manage keys. ' + 
+                                       'If the API is not available, the wallet operates in mock data mode.');
+            }
+        }
+        
+        // Settings Manager
+        class SettingsManager {
+            constructor(api, themeManager) {
+                this.api = api;
+                this.themeManager = themeManager;
+                this.initUI();
+                this.loadSettings();
+                this.showTab('options-tab'); // Default tab
+            }
+
+            initUI() {
+                document.getElementById('animation-toggle').addEventListener('change', (e) => this.toggleAnimation(e.target.checked));
+                document.getElementById('sound-toggle').addEventListener('change', (e) => this.toggleSound(e.target.checked));
+                document.getElementById('apply-settings').addEventListener('click', () => this.applyGeneralSettings());
+                document.getElementById('crazy-mode-btn').addEventListener('click', () => this.toggleCrazyMode());
+                document.getElementById('test-connection').addEventListener('click', () => this.testConnection());
+                document.getElementById('save-connection').addEventListener('click', () => this.saveConnection());
+                document.getElementById('api-endpoint').value = this.api.apiBase;
+
+                document.getElementById('settings-window').querySelectorAll('.window-menubar .menu-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        // Deactivate all tab content
+                        document.getElementById('settings-window').querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+                        // Activate the corresponding tab content based on menu-item text (simplified for this structure)
+                        const tabId = item.textContent.toLowerCase().replace(/\s/g, '-') + '-tab';
+                        const targetTab = document.getElementById(tabId);
+                        if (targetTab) {
+                            targetTab.classList.add('active');
+                        }
+                    });
+                });
+            }
+
+            showTab(tabId) {
+                document.getElementById('settings-window').querySelectorAll('.tab-content').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                document.getElementById(tabId).classList.add('active');
+            }
+
+            loadSettings() {
+                const animationsEnabled = localStorage.getItem('nock_animations') !== 'false';
+                document.getElementById('animation-toggle').checked = animationsEnabled;
+                this.toggleAnimation(animationsEnabled);
+
+                const soundsEnabled = localStorage.getItem('nock_sounds') !== 'false';
+                document.getElementById('sound-toggle').checked = soundsEnabled;
+                // No actual sound implementation, but setting the checkbox state.
+
+                this.themeManager.applyTheme(localStorage.getItem('nock_theme') || 'classic');
+            }
+
+            applyGeneralSettings() {
+                const animationsEnabled = document.getElementById('animation-toggle').checked;
+                const soundsEnabled = document.getElementById('sound-toggle').checked;
+
+                localStorage.setItem('nock_animations', animationsEnabled);
+                localStorage.setItem('nock_sounds', soundsEnabled);
+                
+                this.toggleAnimation(animationsEnabled);
+                messageBox.show('Settings', 'General settings applied!');
+            }
+
+            toggleAnimation(enable) {
+                if (enable) {
+                    document.body.classList.remove('no-animations'); // Assuming you might add this class
+                } else {
+                    document.body.classList.add('no-animations');
+                }
+            }
+
+            toggleCrazyMode() {
+                document.body.classList.toggle('crazy-mode');
+                if (document.body.classList.contains('crazy-mode')) {
+                    messageBox.show('Warning', 'Crazy Mode Activated! Enjoy the show.');
+                } else {
+                    messageBox.show('Crazy Mode', 'Crazy Mode Deactivated.');
+                }
+            }
+
+            async testConnection() {
+                const endpoint = document.getElementById('api-endpoint').value;
+                this.api.apiBase = endpoint; // Temporarily set for testing
+                const result = await this.api.connect();
+                if (result.success) {
+                    messageBox.show('Connection Test', `Connection successful!<br>Status: ${result.data.status}<br>Uptime: ${result.data.uptime} seconds.`);
+                } else {
+                    messageBox.show('Connection Test', 'Connection failed. Falling back to Mock Mode.');
+                }
+                walletManager.updateWalletInfo(); // Update wallet status based on connection
+                this.updateStatusBar();
+            }
+
+            saveConnection() {
+                const endpoint = document.getElementById('api-endpoint').value;
+                localStorage.setItem('nock_api_base', endpoint);
+                this.api.apiBase = endpoint;
+                messageBox.show('Connection Settings', 'API Endpoint saved. Please test connection.');
+            }
+
+            updateStatusBar() {
+                const statusNetwork = document.getElementById('status-network');
+                const statusMode = document.getElementById('status-mode');
+                
+                if (this.api.connected && !this.api.useMockData) {
+                    statusNetwork.textContent = 'Network: Connected';
+                    statusNetwork.style.color = '#00FF00'; // Green
+                    statusMode.style.display = 'none';
+                } else {
+                    statusNetwork.textContent = 'Network: Disconnected';
+                    statusNetwork.style.color = '#FFD700'; // Yellow/Orange
+                    statusMode.style.display = 'inline-block';
+                }
+            }
+        }
+        
+        // Status Bar Manager
+        class StatusBarManager {
+            constructor(api) {
+                this.api = api;
+                this.init();
+            }
+
+            init() {
+                this.updateTime();
+                setInterval(() => this.updateTime(), 1000); // Update time every second
+                setInterval(() => this.updateBlockchainInfo(), 5000); // Update blockchain info every 5 seconds
+                this.updateBlockchainInfo(); // Initial call
+                settingsManager.updateStatusBar(); // Initial network status based on API
+            }
+
+            updateTime() {
+                const now = new Date();
+                const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                document.getElementById('status-time').textContent = timeString;
+            }
+
+            async updateBlockchainInfo() {
+                const info = await this.api.getBlockchainInfo();
+                document.getElementById('status-block').textContent = `Block: ${info.height.height}`;
+                settingsManager.updateStatusBar(); // Update network status in case connection changed
+            }
+        }
+        
+        // Initialize everything
+        const nockchainApi = new NockchainAPI();
+        const windowManager = new WindowManager();
+        const walletManager = new WalletManager(nockchainApi);
+        const themeManager = new ThemeManager();
+        const settingsManager = new SettingsManager(nockchainApi, themeManager);
+        const statusBarManager = new StatusBarManager(nockchainApi);
+
+        // Perform initial connection check on load
+        nockchainApi.connect().then(() => {
+            walletManager.updateWalletInfo();
+            settingsManager.updateStatusBar();
+        });
+
+        // Set initial public key if available from local storage
+        const storedPublicKey = localStorage.getItem('nock_public_key');
+        if (storedPublicKey) {
+            nockchainApi.publicKey = storedPublicKey;
+            document.getElementById('master-pubkey').value = storedPublicKey;
+        } else {
+            // Generate initial keys if none exist
+            walletManager.generateKeys();
+        }
+    </script>
+</body>
+</html>

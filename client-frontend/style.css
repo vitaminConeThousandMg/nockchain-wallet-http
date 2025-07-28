@@ -1,0 +1,251 @@
+/*───────────────────────────────────────────────────────────╮
+  Nockchain Wallet – Millennium Edition UI
+  A Windows-98 façade with restrained Art-Deco accents
+  Updated: 2025-07-27
+╰───────────────────────────────────────────────────────────*/
+
+/* ------------- 1. PALETTE & METRICS --------------------- */
+
+:root{
+  /* Greys & chrome */
+  --chrome-light:#dcdcdc;
+  --chrome:#c0c0c0;
+  --chrome-dark:#808080;
+  --chrome-darker:#4d4d4d;
+
+  /* Accent colours (Deco teal & lilac) */
+  --teal:#008c8c;
+  --lilac:#8266ff;
+  --blue-98:#000080;
+
+  /* Neutrals */
+  --white:#ffffff;
+  --black:#000000;
+
+  /* Shadow */
+  --shadow:rgba(0,0,0,.35);
+
+  /* Fixed heights */
+  --titlebar-h:28px;
+  --toolbar-h:28px;
+  --status-h:20px;
+}
+
+/* ------------- 2. GLOBAL RESET -------------------------- */
+
+*,*::before,*::after{box-sizing:border-box;}
+
+html,body{
+  height:100%;
+  margin:0;
+  background:var(--chrome-light);
+  font:14px/1.35 "Tahoma","Segoe UI",sans-serif;
+  color:var(--black);
+  overflow:hidden;          /* desktop-like */
+  user-select:none;         /* retro vibe  */
+}
+
+/* ------------- 3. APP-SHELL ELEMENTS -------------------- */
+
+/* Top OS-wide title-bar */
+#app-titlebar{
+  position:fixed;top:0;left:0;right:0;
+  height:var(--titlebar-h);
+  display:flex;align-items:center;
+  padding:0 6px;
+  background:linear-gradient(90deg,var(--blue-98)0%,var(--lilac)100%);
+  color:var(--white);
+  z-index:1000;
+  border-bottom:2px solid var(--chrome-darker);
+}
+
+#app-titlebar .app-icon{margin-right:6px;vertical-align:text-bottom;}
+.subtitle{font-size:11px;opacity:.8;}
+
+/* Menubar */
+.menubar{margin-left:32px;display:flex;gap:4px;}
+.menu-btn{
+  padding:0 12px;
+  height:calc(var(--titlebar-h) - 6px);
+  line-height:calc(var(--titlebar-h) - 8px);
+  background:var(--chrome);
+  border:2px outset var(--white);
+  font-weight:bold;
+  cursor:default;
+}
+.menu-btn:active{border-style:inset;}
+
+/* Title-bar util buttons (top-right) */
+.titlebar-buttons{margin-left:auto;display:flex;gap:2px;}
+.titlebar-buttons button{
+  width:21px;height:21px;font-weight:bold;
+  border:2px outset var(--white);background:var(--chrome);
+  line-height:17px;cursor:pointer;
+}
+.titlebar-buttons button:active{border-style:inset;}
+
+/* Decorative icon toolbar */
+#decor-toolbar{
+  position:fixed;top:var(--titlebar-h);left:0;right:0;
+  height:var(--toolbar-h);
+  background:var(--chrome);
+  border-bottom:2px solid var(--chrome-dark);
+  padding:3px 4px;
+  display:flex;align-items:center;gap:4px;
+  z-index:900;
+}
+#decor-toolbar button{
+  width:24px;height:24px;border:2px outset var(--white);
+  background:var(--chrome);padding:0;
+}
+#decor-toolbar button:active{border-style:inset;}
+.toolbar-sep{flex:0 0 1px;height:60%;background:var(--chrome-dark);}
+.toolbar-filler{flex:1;}
+
+/* Desktop work-area */
+#desktop-area{
+  position:absolute;
+  top:calc(var(--titlebar-h) + var(--toolbar-h));
+  left:0;right:0;
+  bottom:var(--status-h);
+  overflow:hidden;
+}
+
+/* Bottom status strip */
+#status-strip{
+  position:fixed;bottom:0;left:0;right:0;
+  height:var(--status-h);
+  background:var(--chrome);
+  border-top:2px solid var(--chrome-dark);
+  padding:2px 6px;
+  display:flex;align-items:center;
+  font-size:12px;
+}
+.status-spacer{flex:1;}
+
+/* ------------- 4. GENERIC WIN-98 WINDOW ---------------- */
+
+.win98-window{
+  position:absolute;          /* draggable via JS */
+  min-width:280px;max-width:90%;
+  background:var(--white);
+  border:2px solid var(--chrome);
+  box-shadow:6px 6px 12px var(--shadow);
+  border-radius:3px;          /* tiny Deco softening */
+  overflow:hidden;
+  z-index:10;
+}
+
+.win98-titlebar.internal{
+  height:var(--titlebar-h);
+  background:linear-gradient(90deg,var(--teal)0%,var(--blue-98)100%);
+  color:var(--white);
+  display:flex;align-items:center;
+  padding:0 6px;
+  border-bottom:2px solid var(--chrome-darker);
+}
+.win98-titlebar.internal .titlebar-buttons{margin-left:auto;}
+
+.win98-content{
+  padding:14px;
+  overflow:auto;
+  max-height:calc(100vh - var(--titlebar-h)*3);
+}
+
+/* ------------- 5. LAUNCH-PAD WINDOW -------------------- */
+
+.launcher-window{
+  /* size & centred positioning */
+  width:80vw;height:80vh;
+  max-width:90vw;max-height:90vh;
+  left:50%;top:50%;transform:translate(-50%,-50%);
+
+  /* styling */
+  text-align:center;
+  padding:32px 4% 24px;
+  box-shadow:8px 8px 18px var(--shadow);
+}
+
+.launch-intro{
+  margin:0 0 32px;
+  font-size:1.1rem;line-height:1.45;
+}
+
+.launch-buttons{
+  height:calc(100% - 140px);     /* intro + footer allowance */
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  grid-auto-rows:1fr;
+  gap:24px;
+  place-items:stretch stretch;
+  padding:0 6%;
+}
+
+.launch-btn{
+  font-size:1.25rem;font-weight:700;
+  border:2px outset var(--white);
+  background:var(--chrome);
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .06s;
+}
+.launch-btn:active{border-style:inset;transform:translateY(1px);}
+.launch-btn:focus-visible{outline:2px dotted var(--blue-98);}
+
+/* footer */
+.launch-footer{
+  position:absolute;bottom:12px;left:0;right:0;
+  text-align:center;
+  font-size:.9rem;opacity:.7;
+}
+
+/* ------------- 6. COMMON CONTROLS ---------------------- */
+
+h2.win98-section-title{
+  margin:0 0 10px;
+  font-size:16px;
+  color:var(--teal);
+  border-bottom:2px solid var(--chrome-dark);
+}
+
+.win98-balance-box{
+  width:60%;margin:0 auto 12px;padding:10px;
+  font-weight:700;text-align:center;
+  background:var(--chrome-light);
+  border:2px inset var(--chrome-dark);
+}
+
+.win98-btn{
+  padding:6px 14px;margin:4px 2px;
+  font-weight:bold;
+  background:var(--chrome);
+  border:2px outset var(--white);
+  cursor:pointer;
+}
+.win98-btn:active{border-style:inset;}
+
+.win98-table{
+  width:100%;border-collapse:collapse;
+  margin:8px 0 12px;font-size:13px;
+}
+.win98-table th,
+.win98-table td{border:1px solid var(--chrome-dark);padding:4px 6px;}
+.win98-table th{background:var(--blue-98);color:var(--white);}
+
+.win98-input{
+  width:100%;padding:4px 6px;
+  background:var(--white);
+  border:1px solid var(--chrome-darker);
+  font-size:13px;
+}
+
+.win98-footnote{
+  margin:6px 0 0;
+  font-size:12px;opacity:.7;line-height:1.3;
+}
+
+/* ------------- 7. UTILITY CLASSES ---------------------- */
+
+.win98-window.active{z-index:99;}
+.hidden{display:none!important;}
+
