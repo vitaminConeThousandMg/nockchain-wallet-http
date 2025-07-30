@@ -341,13 +341,13 @@ app.post('/swap/initiate', async (req, res) => {
       });
     }
 
-//block height
+    // Get block height
     const heightData = await blockchainApi.getHeight();
     const currentHeight = typeof heightData === 'object' && 'height' in heightData 
       ? heightData.height 
       : heightData;
 
-// notes
+    // Get notes before transaction
     const notesCommand = await createSignedCommand('list-notes', {});
     const notesResult = await processSignedCommand(notesCommand);
     const notesBefore = notesResult.success && notesResult.output 
@@ -368,11 +368,12 @@ app.post('/swap/initiate', async (req, res) => {
 
     swapTransactions.set(swap_id, swapTx);
 
+    // Build params with amountNock to let sendor.ts handle UTXO selection
     const spendParams = {
       recipients: [{ count: 1, address: recipient }],
-      gifts: [Number(amount)],
-      names: [['swap', 'bridge']],
+      amountNock: Number(amount),  // Let sendor.ts calculate gifts and select UTXOs
       fee: Number(fee)
+      // No names or gifts - sendor.ts will handle this
     };
 
     const parsedCommand = JSON.parse(msg);
@@ -560,9 +561,35 @@ app.get('/swap/status/:swap_id', async (req, res) => {
   }
 });
 
-//--
+//-- check balance
 
-// POST /wallet/list-notes get receipts/utxo of sent and locally confirmed tx
+app.get('/wallet/balance', async (req, res) => {
+  try {
+    const { pubkey } = req.query;
+    
+    // Import getWalletBalance from sendor
+    const { getWalletBalance } = await import('./sendor');
+    
+    const balanceAssets = await getWalletBalance(pubkey as string | undefined);
+    const balanceNock = balanceAssets / 65536;
+    
+    res.json({
+      success: true,
+      balance: {
+        assets: balanceAssets,
+        nock: balanceNock
+      }
+    });
+    
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
+// POST /wallet/list-notes 
 app.post('/wallet/list-notes', async (req, res) => {
   try {
     const { msg, sig, publicKey, pubkey } = req.body;
