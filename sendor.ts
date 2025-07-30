@@ -35,6 +35,18 @@ export interface CommandResult {
   error?: string;
 }
 
+// Interface for parsed note/UTXO
+export interface ParsedNote {
+  first_name: string;
+  last_name: string;
+  assets: number;  // Already parsed as number (without dots)
+  source_pubkey1?: string;
+  source_pubkey2?: string;
+  is_coinbase?: boolean;
+  lock_m?: number;
+  lock_signers?: string[];
+}
+
 // Strict interfaces for simple-spend validation
 export interface ValidatedRecipient {
   count: number;    
@@ -46,6 +58,12 @@ export interface ValidatedSimpleSpendParams {
   gifts: number[];      
   names: string[][];   
   fee: number;         
+}
+
+// Extended interface for UTXO-based spending
+export interface ValidatedSimpleSpendParamsWithUTXOs extends ValidatedSimpleSpendParams {
+  selectedNotes?: ParsedNote[];
+  senderPubkey?: string;
 }
 
 function isValidNockchainAddress(address: string): boolean {
@@ -67,7 +85,6 @@ function isValidNockchainAddress(address: string): boolean {
   }
 }
 
-
 function sanitizeForBash(input: string): string {
   if (typeof input !== 'string') return '';
   return input
@@ -77,12 +94,110 @@ function sanitizeForBash(input: string): string {
     .slice(0, 100);              // Limit length
 }
 
-function validateSimpleSpendParams(params: any): ValidatedSimpleSpendParams {
+// Parse asset amount from string with dots to number
+function parseAssetAmount(assetStr: string): number {
+  // Remove dots and parse as number
+  return parseFloat(assetStr.replace(/\./g, ''));
+}
+
+// Get notes for a specific public key
+export async function getNotesByPubkey(pubkey: string): Promise<ParsedNote[]> {
+  const command = await createSignedCommand('list-notes-by-pubkey', { pubkey });
+  const result = await processSignedCommand(command);
+  
+  if (!result.success || !result.output) {
+    throw new Error('Failed to get notes by pubkey');
+  }
+  
+  return parseNotesOutput(result.output);
+}
+
+// Get all notes from wallet
+export async function getAllNotes(): Promise<ParsedNote[]> {
+  const command = await createSignedCommand('list-notes', {});
+  const result = await processSignedCommand(command);
+  
+  if (!result.success || !result.output) {
+    throw new Error('Failed to get notes');
+  }
+  
+  return parseNotesOutput(result.output);
+}
+
+// Get wallet balance for a public key
+export async function getWalletBalance(pubkey?: string): Promise<number> {
+  const notes = pubkey ? await getNotesByPubkey(pubkey) : await getAllNotes();
+  return notes.reduce((total, note) => total + note.assets, 0);
+}
+
+// Select notes that total at least the required amount
+export async function getNotesEqualTo(amountNock: number, pubkey?: string): Promise<{
+  selectedNotes: ParsedNote[];
+  totalAssets: number;
+}> {
+  // Calculate required assets (amount * 65536 + 10)
+  const requiredAssets = (amountNock * 65536) + 10;
+  
+  // Get available notes
+  const availableNotes = pubkey ? await getNotesByPubkey(pubkey) : await getAllNotes();
+  
+  // Sort notes by assets descending (use larger notes first)
+  availableNotes.sort((a, b) => b.assets - a.assets);
+  
+  const selectedNotes: ParsedNote[] = [];
+  let totalAssets = 0;
+  
+  // Select notes until we have enough
+  for (const note of availableNotes) {
+    selectedNotes.push(note);
+    totalAssets += note.assets;
+    
+    if (totalAssets >= requiredAssets) {
+      break;
+    }
+  }
+  
+  // Check if we have enough
+  if (totalAssets < requiredAssets) {
+    throw new Error(`Insufficient balance. Required: ${requiredAssets} assets (${amountNock} NOCK), Available: ${totalAssets} assets`);
+  }
+  
+  return { selectedNotes, totalAssets };
+}
+
+// Build gifts array based on selected notes and amount to send
+function buildGiftsArray(selectedNotes: ParsedNote[], amountNock: number, fee: number): number[] {
+  const totalAssetsToSpend = (amountNock * 65536) + (fee * 65536);
+  const gifts: number[] = [];
+  let remainingToSpend = totalAssetsToSpend;
+  
+  for (let i = 0; i < selectedNotes.length; i++) {
+    const note = selectedNotes[i];
+    
+    if (i === selectedNotes.length - 1) {
+      // Last note: use exactly what's remaining
+      gifts.push(remainingToSpend);
+    } else if (note.assets <= remainingToSpend) {
+      // Use entire note
+      gifts.push(note.assets);
+      remainingToSpend -= note.assets;
+    } else {
+      // Use part of the note
+      gifts.push(remainingToSpend);
+      remainingToSpend = 0;
+    }
+  }
+  
+  return gifts;
+}
+
+// Modified validation to handle UTXO-based params
+async function validateSimpleSpendParamsWithUTXOs(params: any): Promise<ValidatedSimpleSpendParamsWithUTXOs> {
   if (!params || typeof params !== 'object') {
     throw new Error('Invalid params: must be an object');
   }
 
-  const { recipients, gifts, names, fee } = params;
+  const { recipients, gifts, names, fee, amountNock, senderPubkey } = params;
 
   // Validate recipients
   if (!Array.isArray(recipients) || recipients.length === 0) {
@@ -113,13 +228,41 @@ function validateSimpleSpendParams(params: any): ValidatedSimpleSpendParams {
     return { count, address };
   });
 
-  // Validate gifts
-  if (!Array.isArray(gifts) || gifts.length === 0) {
-    throw new Error('Invalid gifts: must be non-empty array');
+  // Validate fee
+  const feeNum = Number(fee);
+  if (!Number.isInteger(feeNum) || feeNum < 1 || feeNum > 1000) {
+    throw new Error('Invalid fee: must be integer between 1-1000');
   }
 
-  if (gifts.length !== recipients.length) {
-    throw new Error(`Gifts array length (${gifts.length}) must match recipients length (${recipients.length})`);
+  // If amountNock is provided, we need to select UTXOs
+  if (amountNock !== undefined) {
+    const amountNum = Number(amountNock);
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      throw new Error('Invalid amountNock: must be positive number');
+    }
+
+    // Select UTXOs
+    const { selectedNotes, totalAssets } = await getNotesEqualTo(amountNum, senderPubkey);
+    
+    // Build gifts array based on selected notes
+    const calculatedGifts = buildGiftsArray(selectedNotes, amountNum, feeNum);
+    
+    // Extract names from selected notes
+    const calculatedNames = selectedNotes.map(note => [note.first_name, note.last_name]);
+
+    return {
+      recipients: validatedRecipients,
+      gifts: calculatedGifts,
+      names: calculatedNames,
+      fee: feeNum,
+      selectedNotes,
+      senderPubkey
+    };
+  }
+
+  // Fallback to manual validation if no amountNock provided
+  if (!Array.isArray(gifts) || gifts.length === 0) {
+    throw new Error('Invalid gifts: must be non-empty array when amountNock not provided');
   }
 
   const validatedGifts: number[] = gifts.map((gift, index) => {
@@ -127,14 +270,11 @@ function validateSimpleSpendParams(params: any): ValidatedSimpleSpendParams {
     if (!Number.isFinite(giftNum) || giftNum <= 0) {
       throw new Error(`Invalid gift at index ${index}: must be positive number`);
     }
-    if (giftNum > 1000000000) {
-      throw new Error(`Gift amount too large at index ${index}: maximum 1 billion`);
-    }
     return giftNum;
   });
 
   if (!Array.isArray(names)) {
-    throw new Error('Invalid names: must be array');
+    throw new Error('Invalid names: must be array when amountNock not provided');
   }
 
   const validatedNames: string[][] = names.map((nameArray, index) => {
@@ -154,12 +294,6 @@ function validateSimpleSpendParams(params: any): ValidatedSimpleSpendParams {
     });
   });
 
-  // Validate fee
-  const feeNum = Number(fee);
-  if (!Number.isInteger(feeNum) || feeNum < 1 || feeNum > 1000) {
-    throw new Error('Invalid fee: must be integer between 1-1000');
-  }
-
   return {
     recipients: validatedRecipients,
     gifts: validatedGifts,
@@ -169,10 +303,10 @@ function validateSimpleSpendParams(params: any): ValidatedSimpleSpendParams {
 }
 
 // Build safe command string for simple-spend
-function buildSimpleSpendCommand(validated: ValidatedSimpleSpendParams): string {
+function buildSimpleSpendCommand(validated: ValidatedSimpleSpendParamsWithUTXOs): string {
   const baseCmd = `nockchain-wallet --nockchain-socket ${WALLET_PATH}`;
   
-  // Build names string: "[Alice Sender],[Bob User]"
+  // Build names string from actual UTXO names
   const namesStr = validated.names.map(nameArray => 
     nameArray.join(' ')
   ).join(',');
@@ -205,7 +339,6 @@ async function executeCompleteTransaction(simpleSpendCommand: string): Promise<s
     }
     
     // Extract draft filename from output
-    
     const draftMatch = draftOutput.match(/draft[_\w]*\.draft/);
     if (!draftMatch) {
       throw new Error('Could not find draft filename in simple-spend output');
@@ -259,13 +392,12 @@ async function executeCompleteTransaction(simpleSpendCommand: string): Promise<s
   }
 }
 
-// --
-
-port function parseAndBuildCommand(signedCommand: SignedCommand): string {
+// Fixed typo: "port" -> "export"
+export async function parseAndBuildCommand(signedCommand: SignedCommand): Promise<string> {
   const { action, params } = signedCommand;
   
   if (action === 'simple-spend') {
-    const validated = validateSimpleSpendParams(params);
+    const validated = await validateSimpleSpendParamsWithUTXOs(params);
     return buildSimpleSpendCommand(validated);
   }
   
@@ -284,16 +416,41 @@ port function parseAndBuildCommand(signedCommand: SignedCommand): string {
   throw new Error(`Unknown action: ${action}. Supported: 'simple-spend', 'list-notes', 'list-notes-by-pubkey'`);
 }
 
-// --
+// Add missing executeWalletCommand function
+export async function executeWalletCommand(command: string): Promise<string> {
+  console.log('[EXECUTING]', command);
+  
+  // Check if this is a simple-spend command (needs 3-step process)
+  if (command.includes('simple-spend')) {
+    return executeCompleteTransaction(command);
+  }
+  
+  // For other commands, execute directly
+  try {
+    const { stdout, stderr } = await execAsync(command, {
+      timeout: 30000,
+      maxBuffer: 1024 * 1024
+    });
 
-export function parseNotesOutput(output: string): any[] {
-  const notes = [];
+    if (stderr && stderr.trim()) {
+      console.warn('[STDERR]', stderr.trim());
+    }
+
+    return stdout.trim();
+  } catch (error: any) {
+    console.error('[EXEC ERROR]', error);
+    throw new Error(`Command execution failed: ${error.message}`);
+  }
+}
+
+export function parseNotesOutput(output: string): ParsedNote[] {
+  const notes: ParsedNote[] = [];
   const noteBlocks = output.split(/(?=details)/g);
   
   for (const block of noteBlocks) {
     if (!block.trim()) continue;
     
-    const note: any = {};
+    const note: Partial<ParsedNote> = {};
     
     // Parse details section
     const nameMatch = block.match(/name:\s*\[first='([^']+)'\s+last='([^']+)'\]/);
@@ -302,9 +459,10 @@ export function parseNotesOutput(output: string): any[] {
       note.last_name = nameMatch[2];
     }
     
+    // Parse assets with dots
     const assetsMatch = block.match(/assets:\s*([\d.]+)/);
     if (assetsMatch) {
-      note.assets = parseFloat(assetsMatch[1].replace(/\./g, ''));
+      note.assets = parseAssetAmount(assetsMatch[1]);
     }
     
     const sourceMatch = block.match(/source:\s*\[p=\[\[([^\]]+)\s+([^\]]+)\]\]\s+is-coinbase=([^\]]+)\]/);
@@ -325,15 +483,14 @@ export function parseNotesOutput(output: string): any[] {
       note.lock_signers = [signersMatch[1]];
     }
     
-    if (Object.keys(note).length > 0) {
-      notes.push(note);
+    // Only add if we have the required fields
+    if (note.first_name && note.last_name && note.assets !== undefined) {
+      notes.push(note as ParsedNote);
     }
   }
   
   return notes;
 }
-
-// --
 
 export function verifySignature(msg: string, sig: string, publicKey: string): boolean {
   try {
@@ -392,7 +549,7 @@ export async function processSignedCommand(request: CommandRequest): Promise<Com
       return { success: false, error: 'Command timestamp is too old or too far in the future' };
     }
 
-    const walletCommand = parseAndBuildCommand(signedCommand);
+    const walletCommand = await parseAndBuildCommand(signedCommand);
     const output = await executeWalletCommand(walletCommand);
     
     return {
@@ -436,7 +593,6 @@ export function verifyCommandSignature(request: CommandRequest): { valid: boolea
 
   return { valid: isValid, authorized: isAuthorized };
 }
-
 
 export const getConfiguration = () => ({
   walletPath: WALLET_PATH,
