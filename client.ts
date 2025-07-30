@@ -26,6 +26,19 @@ interface Recipient {
   address: string;
 }
 
+interface SwapStatus {
+  swap_id: string;
+  status: string;
+  recipient: string;
+  amount: number;
+  fee: number;
+  initial_block_height: number;
+  created_at: number;
+  updated_at: number;
+  tx_id?: string;
+  error?: string;
+}
+
 // ============================================================================
 // CORE CLIENT CLASS
 // ============================================================================
@@ -77,6 +90,10 @@ export class NockchainClient {
     };
   }
 
+  // ============================================================================
+  // API COMMUNICATION
+  // ============================================================================
+
   // Send any signed command to the API
   async sendCommand(action: string, params: any): Promise<any> {
     const signedRequest = this.createSignedCommand(action, params);
@@ -97,95 +114,159 @@ export class NockchainClient {
   }
 
   // ============================================================================
-  // SIMPLE-SPEND COMMANDS
+  // WALLET OPERATIONS
   // ============================================================================
 
-  // Full simple-spend with all parameters
-  async simpleSpend(
-    recipients: Recipient[],
-    gifts: number[],
-    names: string[][] = [['anon', 'anon']],
+  // Send NOCK using automatic UTXO selection
+  async sendNock(
+    amountNock: number,
+    recipient: string,
     fee: number = 10
   ): Promise<any> {
-    console.log(`[SEND] ${gifts.join(',')} to ${recipients.length} recipients`);
+    console.log(`[SEND] ${amountNock} NOCK to ${recipient}`);
     
     const result = await this.sendCommand('simple-spend', {
-      recipients,
-      gifts,
-      names,
+      recipients: [{ count: 1, address: recipient }],
+      amountNock,
       fee
     });
     
-    console.log('[SUCCESS] Transaction executed:', result.output);
+    console.log('[SUCCESS] Transaction sent');
     return result;
   }
 
-  // Send to single recipient (most common case)
-  async sendToOne(
-    amount: number,
-    recipient: string,
-    senderName: string[] = ['anon', 'anon'],
-    fee: number = 10
-  ): Promise<any> {
-    return this.simpleSpend(
-      [{ count: 1, address: recipient }],
-      [amount],
-      [senderName],
-      fee
-    );
+  // List all notes (UTXOs) in wallet
+  async listNotes(): Promise<any> {
+    return this.sendCommand('list-notes', {});
   }
 
-  // Send to multiple recipients with same amount each
-  async sendToMany(
-    amount: number,
-    recipients: string[],
-    senderName: string[] = ['anon', 'anon'],
-    fee: number = 10
-  ): Promise<any> {
-    const recipientObjects = recipients.map(addr => ({ count: 1, address: addr }));
-    const gifts = recipients.map(() => amount);
+  // List notes for specific public key
+  async listNotesByPubkey(pubkey: string): Promise<any> {
+    return this.sendCommand('list-notes-by-pubkey', { pubkey });
+  }
+
+  // Check wallet balance
+  async getBalance(pubkey?: string): Promise<{ assets: number; nock: number }> {
+    const endpoint = pubkey ? `/wallet/balance?pubkey=${pubkey}` : '/wallet/balance';
+    const response = await fetch(`${this.apiBase}${endpoint}`);
+    const result = await response.json();
     
-    return this.simpleSpend(recipientObjects, gifts, [senderName], fee);
-  }
-
-  // Send different amounts to different recipients
-  async sendMultiple(transfers: Array<{
-    amount: number;
-    recipient: string;
-    count?: number;
-  }>): Promise<any> {
-    const recipients = transfers.map(t => ({ 
-      count: t.count || 1, 
-      address: t.recipient 
-    }));
-    const gifts = transfers.map(t => t.amount);
-    
-    return this.simpleSpend(recipients, gifts);
-  }
-
-  // ============================================================================
-  // UTILITY METHODS
-  // ============================================================================
-
-  // Verify a signature (can be used with any public key)
-  static verifySignature(msg: string, sig: string, publicKey: string): boolean {
-    try {
-      const sigBytes = bs58.decode(sig);
-      const msgBytes = new TextEncoder().encode(msg);
-      const pubKeyBytes = bs58.decode(publicKey);
-      return nacl.sign.detached.verify(msgBytes, sigBytes, pubKeyBytes);
-    } catch (error) {
-      return false;
+    if (!response.ok) {
+      throw new Error(`Failed to get balance: ${result.error}`);
     }
+    
+    return result.balance;
   }
 
-  // Test API connection
-  async testConnection(): Promise<boolean> {
+  // ============================================================================
+  // SWAP OPERATIONS
+  // ============================================================================
+
+  // Initiate a swap (for bridge operations)
+  async initiateSwap(
+    swap_id: string,
+    recipient: string,
+    amount: number,
+    fee: number = 10
+  ): Promise<any> {
+    const signedRequest = this.createSignedCommand('swap', {});
+    
+    const response = await fetch(`${this.apiBase}/swap/initiate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        swap_id,
+        recipient,
+        amount,
+        fee,
+        ...signedRequest
+      })
+    });
+
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(`Swap initiation failed: ${result.error}`);
+    }
+    
+    return result;
+  }
+
+  // Check swap status
+  async getSwapStatus(swap_id: string): Promise<SwapStatus> {
+    const response = await fetch(`${this.apiBase}/swap/status/${swap_id}`);
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get swap status: ${result.error}`);
+    }
+    
+    return result;
+  }
+
+  // ============================================================================
+  // BLOCKCHAIN QUERIES
+  // ============================================================================
+
+  async getBlockchainHeight(): Promise<number> {
+    const response = await fetch(`${this.apiBase}/blockchain/height`);
+    const result = await response.json();
+    return result.data;
+  }
+
+  async getTransaction(txId: string): Promise<any> {
+    const response = await fetch(`${this.apiBase}/blockchain/transaction?id=${txId}`);
+    const result = await response.json();
+    return result.data;
+  }
+
+  async getLatestTransactions(limit: number = 10): Promise<any[]> {
+    const response = await fetch(`${this.apiBase}/blockchain/transactions/latest?limit=${limit}`);
+    const result = await response.json();
+    return result.data;
+  }
+
+  // ============================================================================
+  // STATUS & VERIFICATION
+  // ============================================================================
+
+  // Check server status and verify authentication
+  async checkStatus(): Promise<{
+    serverRunning: boolean;
+    authenticated: boolean;
+    publicKey?: string;
+    error?: string;
+  }> {
     try {
-      const response = await fetch(`${this.apiBase}/health`);
-      return response.ok;
-    } catch (error) {
-      return false;
+      // First check if server is running
+      const healthResponse = await fetch(`${this.apiBase}/health`);
+      if (!healthResponse.ok) {
+        return { serverRunning: false, authenticated: false, error: 'Server not responding' };
+      }
+
+      // Then verify our signature is valid
+      const signedRequest = this.createSignedCommand('test', {});
+      const verifyResponse = await fetch(`${this.apiBase}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(signedRequest)
+      });
+
+      const verifyResult = await verifyResponse.json();
+      
+      return {
+        serverRunning: true,
+        authenticated: verifyResult.valid && verifyResult.authorized,
+        publicKey: this.getPublicKey(),
+        error: !verifyResult.valid ? 'Invalid signature' : 
+               !verifyResult.authorized ? 'Unauthorized public key' : undefined
+      };
+    } catch (error: any) {
+      return {
+        serverRunning: false,
+        authenticated: false,
+        error: error.message
+      };
     }
   }
 
@@ -194,25 +275,6 @@ export class NockchainClient {
     const response = await fetch(`${this.apiBase}/`);
     return response.json();
   }
-}
-
-// ============================================================================
-// STANDALONE UTILITY FUNCTIONS
-// ============================================================================
-
-// Create a client instance
-export function createClient(privateKeyPath: string = DEFAULT_PRIVATE_KEY_PATH): NockchainClient {
-  return new NockchainClient(privateKeyPath);
-}
-
-// Quick send function for simple cases
-export async function quickSend(
-  amount: number, 
-  recipient: string, 
-  privateKeyPath: string = DEFAULT_PRIVATE_KEY_PATH
-): Promise<any> {
-  const client = createClient(privateKeyPath);
-  return client.sendToOne(amount, recipient);
 }
 
 // ============================================================================
@@ -229,20 +291,35 @@ Nockchain API Client
 Usage: node client.js <command> [args...]
 
 Commands:
-  send <amount> <recipient> [firstName] [lastName]
-    - Send amount to single recipient
+  status
+    - Check server status and authentication
     
-  send-many <amount> <recipient1,recipient2,...>
-    - Send same amount to multiple recipients
+  send <amount> <recipient> [fee]
+    - Send NOCK to recipient
     
-  send-multi <amount1,amount2> <recipient1,recipient2> [count1,count2]
-    - Send different amounts to different recipients
+  balance [pubkey]
+    - Check wallet balance
+    
+  notes [pubkey]
+    - List wallet notes (UTXOs)
+    
+  swap-init <swap_id> <recipient> <amount> [fee]
+    - Initiate a swap transaction
+    
+  swap-status <swap_id>
+    - Check swap status
+    
+  height
+    - Get current blockchain height
+    
+  tx <transaction_id>
+    - Get transaction details
+    
+  latest [limit]
+    - Get latest transactions
     
   info
     - Get API information
-    
-  test
-    - Test connection to API
     
   pubkey
     - Show your public key
@@ -252,10 +329,10 @@ Environment Variables:
   PRIVATE_KEY_PATH=${DEFAULT_PRIVATE_KEY_PATH}
 
 Examples:
-  node client.js send 100 2v1Togj... Alice Sender
-  node client.js send-many 50 addr1,addr2,addr3
-  node client.js send-multi 100,200 addr1,addr2 1,2
-  node client.js info
+  node client.js status
+  node client.js send 100 3JWpD1VD...
+  node client.js balance
+  node client.js swap-init swap123 3JWpD1VD... 1000
     `);
     process.exit(1);
   }
@@ -263,62 +340,90 @@ Examples:
   const command = args[0];
   
   try {
-    const client = createClient();
+    const client = new NockchainClient(DEFAULT_PRIVATE_KEY_PATH);
     
     switch (command) {
+      case 'status':
+        const status = await client.checkStatus();
+        console.log('Server Status:', status.serverRunning ? '✅ Running' : '❌ Not running');
+        console.log('Authentication:', status.authenticated ? '✅ Valid' : '❌ Invalid');
+        if (status.publicKey) console.log('Your Public Key:', status.publicKey);
+        if (status.error) console.log('Error:', status.error);
+        break;
+      
       case 'send':
         if (args.length < 3) {
-          console.error('Send requires: amount recipient [firstName] [lastName]');
+          console.error('Send requires: amount recipient [fee]');
           process.exit(1);
         }
-        const amount = parseInt(args[1]);
+        const amount = parseFloat(args[1]);
         const recipient = args[2];
-        const firstName = args[3] || 'anon';
-        const lastName = args[4] || 'anon';
-        await client.sendToOne(amount, recipient, [firstName, lastName]);
+        const fee = args[3] ? parseInt(args[3]) : 10;
+        const sendResult = await client.sendNock(amount, recipient, fee);
+        console.log('Transaction result:', sendResult.output);
         break;
       
-      case 'send-many':
-        if (args.length < 3) {
-          console.error('Send-many requires: amount recipient1,recipient2,...');
-          process.exit(1);
-        }
-        const amountMany = parseInt(args[1]);
-        const recipients = args[2].split(',');
-        await client.sendToMany(amountMany, recipients);
+      case 'balance':
+        const balancePubkey = args[1];
+        const balance = await client.getBalance(balancePubkey);
+        console.log(`Balance: ${balance.nock} NOCK (${balance.assets} assets)`);
         break;
       
-      case 'send-multi':
-        if (args.length < 3) {
-          console.error('Send-multi requires: amounts recipients [counts]');
+      case 'notes':
+        const notesPubkey = args[1];
+        const notesResult = notesPubkey 
+          ? await client.listNotesByPubkey(notesPubkey)
+          : await client.listNotes();
+        console.log('Notes:', notesResult.output);
+        break;
+      
+      case 'swap-init':
+        if (args.length < 4) {
+          console.error('Swap-init requires: swap_id recipient amount [fee]');
           process.exit(1);
         }
-        const amounts = args[1].split(',').map(a => parseInt(a));
-        const recipientAddrs = args[2].split(',');
-        const counts = args[3] ? args[3].split(',').map(c => parseInt(c)) : amounts.map(() => 1);
-        
-        if (amounts.length !== recipientAddrs.length || amounts.length !== counts.length) {
-          console.error('Amounts, recipients, and counts must have same length');
+        const swapId = args[1];
+        const swapRecipient = args[2];
+        const swapAmount = parseFloat(args[3]);
+        const swapFee = args[4] ? parseInt(args[4]) : 10;
+        const swapResult = await client.initiateSwap(swapId, swapRecipient, swapAmount, swapFee);
+        console.log('Swap initiated:', swapResult);
+        break;
+      
+      case 'swap-status':
+        if (args.length < 2) {
+          console.error('Swap-status requires: swap_id');
           process.exit(1);
         }
-        
-        const transfers = amounts.map((amount, i) => ({
-          amount,
-          recipient: recipientAddrs[i],
-          count: counts[i]
-        }));
-        
-        await client.sendMultiple(transfers);
+        const checkSwapId = args[1];
+        const swapStatus = await client.getSwapStatus(checkSwapId);
+        console.log('Swap status:', swapStatus);
+        break;
+      
+      case 'height':
+        const height = await client.getBlockchainHeight();
+        console.log('Current height:', height);
+        break;
+      
+      case 'tx':
+        if (args.length < 2) {
+          console.error('Tx requires: transaction_id');
+          process.exit(1);
+        }
+        const txId = args[1];
+        const tx = await client.getTransaction(txId);
+        console.log('Transaction:', JSON.stringify(tx, null, 2));
+        break;
+      
+      case 'latest':
+        const limit = args[1] ? parseInt(args[1]) : 10;
+        const latest = await client.getLatestTransactions(limit);
+        console.log(`Latest ${limit} transactions:`, JSON.stringify(latest, null, 2));
         break;
       
       case 'info':
         const info = await client.getApiInfo();
         console.log(JSON.stringify(info, null, 2));
-        break;
-      
-      case 'test':
-        const isConnected = await client.testConnection();
-        console.log(`API connection: ${isConnected ? '✅ OK' : '❌ Failed'}`);
         break;
       
       case 'pubkey':
@@ -340,3 +445,5 @@ Examples:
 if (require.main === module) {
   runCLI();
 }
+
+export default NockchainClient;
