@@ -91,10 +91,7 @@ export class NockchainClient {
   }
 
   // ============================================================================
-  // API COMMUNICATION
-  // ============================================================================
-
-  // Send any signed command to the API
+  // API 
   async sendCommand(action: string, params: any): Promise<any> {
     const signedRequest = this.createSignedCommand(action, params);
     
@@ -112,12 +109,75 @@ export class NockchainClient {
     
     return result;
   }
+  // Add to NockchainClient class
+
+// Initialize receive tracking for an address
+async initReceiveTracking(address: string): Promise<any> {
+  const response = await fetch(`${this.apiBase}/wallet/received/${address}?initialize=true`);
+  const result = await response.json();
+  
+  if (!response.ok) {
+    throw new Error(`Failed to initialize tracking: ${result.error}`);
+  }
+  
+  return result;
+}
+
+// Check for new receives
+async checkReceives(address: string, sinceTimestamp?: number): Promise<{
+  newNotes: any[];
+  totalReceived: number;
+  currentBalance: number;
+}> {
+  let url = `${this.apiBase}/wallet/received/${address}`;
+  if (sinceTimestamp) {
+    url += `?since_timestamp=${sinceTimestamp}`;
+  }
+  
+  const response = await fetch(url);
+  const result = await response.json();
+  
+  if (!response.ok) {
+    throw new Error(`Failed to check receives: ${result.error}`);
+  }
+  
+  return {
+    newNotes: result.new_notes || [],
+    totalReceived: result.total_received || 0,
+    currentBalance: result.current_balance || 0
+  };
+}
+
+// Watch for deposits with callback
+async watchDeposits(
+  address: string,
+  onDeposit: (amount: number, note: any) => void,
+  intervalMs: number = 30000
+): Promise<() => void> {
+  await this.initReceiveTracking(address);
+  
+  const interval = setInterval(async () => {
+    try {
+      const { newNotes, totalReceived } = await this.checkReceives(address);
+      
+      if (newNotes.length > 0) {
+        console.log(`[DEPOSIT] Received ${totalReceived} NOCK`);
+        
+        for (const note of newNotes) {
+          const amountNock = note.assets / 65536;
+          onDeposit(amountNock, note);
+        }
+      }
+    } catch (err) {
+      console.error('Error checking deposits:', err);
+    }
+  }, intervalMs);
+  
+  return () => clearInterval(interval);
+}
 
   // ============================================================================
-  // WALLET OPERATIONS
-  // ============================================================================
-
-  // Send NOCK using automatic UTXO selection
+  // WALLET 
   async sendNock(
     amountNock: number,
     recipient: string,
@@ -159,10 +219,7 @@ export class NockchainClient {
   }
 
   // ============================================================================
-  // SWAP OPERATIONS
-  // ============================================================================
-
-  // Initiate a swap (for bridge operations)
+  // SWAP 
   async initiateSwap(
     swap_id: string,
     recipient: string,
