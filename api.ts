@@ -323,17 +323,16 @@ app.get('/health', (req, res) => {
 
 // --
 
+
 app.post('/swap/initiate', async (req, res) => {
   try {
     const { swap_id, recipient, amount, fee = 10, msg, sig, publicKey } = req.body;
-
     if (!swap_id || !recipient || !amount || !msg || !sig || !publicKey) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields: swap_id, recipient, amount, msg, sig, publicKey'
       });
     }
-
     if (swapTransactions.has(swap_id)) {
       return res.status(409).json({
         success: false,
@@ -676,9 +675,178 @@ app.get('/swap/pending', async (req, res) => {
   }
 });
 
-// Add helper functions at the bottom before export:
+interface TrackedNote {
+  note: any;  // The parsed note from parseNotesOutput
+  first_seen: number;  // Timestamp when we first saw this note
+  block_height: number;  // Block height when first seen
+}
 
-// Export for monitoring services
+interface AddressTracker {
+  notes: Map<string, TrackedNote>;  // Key is a unique note identifier
+  last_checked: number;
+  initialized: boolean;
+}
+
+
+const addressTrackers = new Map<string, AddressTracker>();
+
+
+function getNoteId(note: any): string {
+  return `${note.first_name}_${note.last_name}_${note.assets}_${note.is_coinbase}`;
+}
+
+
+app.get('/wallet/received/:address', async (req, res) => {
+  try {
+    const { address } = req.params;
+    const { since_timestamp, initialize } = req.query;
+    
+    const heightData = await blockchainApi.getHeight();
+    const currentHeight = typeof heightData === 'object' && 'height' in heightData 
+      ? heightData.height 
+      : heightData;
+    const notesCommand = await createSignedCommand('list-notes-by-pubkey', { pubkey: address });
+    const notesResult = await processSignedCommand(notesCommand);
+    
+    if (!notesResult.success) {
+      return res.status(500).json({ success: false, error: 'Failed to get notes' });
+    }
+    
+    const currentNotes = parseNotesOutput(notesResult.output || '');
+    
+    let tracker = addressTrackers.get(address);
+    if (!tracker || initialize === 'true') {
+      tracker = {
+        notes: new Map(),
+        last_checked: Date.now(),
+        initialized: true
+      };
+      addressTrackers.set(address, tracker);
+      
+      for (const note of currentNotes) {
+        const noteId = getNoteId(note);
+        tracker.notes.set(noteId, {
+          note,
+          first_seen: Date.now(),
+          block_height: currentHeight
+        });
+      }
+      
+      if (initialize === 'true') {
+        return res.json({
+          success: true,
+          address,
+          message: 'Address tracking initialized',
+          current_balance: currentNotes.reduce((sum, note) => sum + note.assets, 0) / 65536,
+          note_count: currentNotes.length
+        });
+      }
+    }
+    
+    const newTrackedNotes: TrackedNote[] = [];
+    const currentTime = Date.now();
+    
+    for (const note of currentNotes) {
+      const noteId = getNoteId(note);
+      if (!tracker.notes.has(noteId)) {
+        const trackedNote: TrackedNote = {
+          note,
+          first_seen: currentTime,
+          block_height: currentHeight
+        };
+        tracker.notes.set(noteId, trackedNote);
+        newTrackedNotes.push(trackedNote);
+      }
+    }
+    
+    const spentNoteIds: string[] = [];
+    for (const [noteId, trackedNote] of tracker.notes) {
+      const stillExists = currentNotes.some(note => getNoteId(note) === noteId);
+      if (!stillExists) {
+        spentNoteIds.push(noteId);
+      }
+    }
+    
+    for (const noteId of spentNoteIds) {
+      tracker.notes.delete(noteId);
+    }
+    
+    const sinceTimestampNum = since_timestamp ? parseInt(since_timestamp as string) : 0;
+    const filteredNewNotes = newTrackedNotes.filter(tn => tn.first_seen >= sinceTimestampNum);
+    
+    tracker.last_checked = currentTime;
+    
+    res.json({
+      success: true,
+      address,
+      new_notes: filteredNewNotes.map(tn => ({
+        ...tn.note,
+        first_seen: tn.first_seen,
+        block_height: tn.block_height
+      })),
+      spent_notes_count: spentNoteIds.length,
+      total_received: filteredNewNotes.reduce((sum, tn) => sum + tn.note.assets, 0) / 65536,
+      current_balance: currentNotes.reduce((sum, note) => sum + note.assets, 0) / 65536,
+      last_checked: tracker.last_checked
+    });
+    
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/wallet/received/reset/:address', async (req, res) => {
+  try {
+    const { address } = req.params;
+    
+    if (addressTrackers.has(address)) {
+      addressTrackers.delete(address);
+      res.json({
+        success: true,
+        message: `Tracking reset for address ${address}`
+      });
+    } else {
+      res.json({
+        success: true,
+        message: `No tracking data found for address ${address}`
+      });
+    }
+    
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/wallet/received/status', async (req, res) => {
+  try {
+    const status = Array.from(addressTrackers.entries()).map(([address, tracker]) => ({
+      address,
+      note_count: tracker.notes.size,
+      last_checked: tracker.last_checked,
+      balance: Array.from(tracker.notes.values()).reduce((sum, tn) => sum + tn.note.assets, 0) / 65536
+    }));
+    
+    res.json({
+      success: true,
+      tracked_addresses: status.length,
+      addresses: status
+    });
+    
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+setInterval(() => {
+  const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+  
+  for (const [address, tracker] of addressTrackers.entries()) {
+    if (tracker.last_checked < oneWeekAgo) {
+      addressTrackers.delete(address);
+      console.log(`[CLEANUP] Removed stale tracking for address: ${address}`);
+    }
+  }
+}, 24 * 60 * 60 * 1000); // Run daily
 export function getSwapTransaction(swap_id: string): SwapTransaction | undefined {
   return swapTransactions.get(swap_id);
 }
@@ -697,13 +865,10 @@ export function updateSwapStatus(
   
   return true;
 }
-
 export function getPendingSwaps(): SwapTransaction[] {
   return Array.from(swapTransactions.values())
     .filter(s => s.status === 'pending' || s.status === 'spent_pending');
 }
-
-// Import parseNotesOutput from sendor
 import { parseNotesOutput } from './sendor';
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Unhandled error:', err);
@@ -712,8 +877,6 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     error: 'Internal server error' 
   });
 });
-
-
 app.use((req, res) => {
   res.status(404).json({ 
     success: false, 
@@ -721,10 +884,8 @@ app.use((req, res) => {
   });
 });
 
-
 if (require.main === module) {
   const config = getConfiguration();
-  
   app.listen(PORT, () => {
     console.log(`Nockchain API server running on port ${PORT}`);
     console.log(`Wallet socket: ${config.walletPath}`);
