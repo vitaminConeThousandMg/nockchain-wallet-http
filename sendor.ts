@@ -575,8 +575,7 @@ export async function createSignedCommand(action: string, params: any, keyPath?:
 
   const keyPair = loadSigningKey(keyPath || DEFAULT_SIGNING_KEY_PATH);
   const msgBytes = Buffer.from(JSON.stringify(signedCommand, Object.keys(signedCommand).sort()));
-  const signedMessage = nacl.sign(msgBytes, keyPair.secretKey);
-  const signature = signedMessage.slice(0, 64);
+  const signature = nacl.sign.detached(msgBytes, keyPair.secretKey);
 
   return {
     msg: JSON.stringify(signedCommand),
@@ -601,3 +600,4 @@ export const getConfiguration = () => ({
   supportedActions: ['simple-spend', 'list-notes', 'list-notes-by-pubkey'],
   draftsDirectory: DRAFTS_DIR
 });
+
