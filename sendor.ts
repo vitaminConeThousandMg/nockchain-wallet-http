@@ -348,7 +348,7 @@ async function executeCompleteTransaction(simpleSpendCommand: string): Promise<s
     const draftPath = path.join(DRAFTS_DIR, draftFilename);
     
     try {
-      const signCommand = `nockchain-wallet --nockchain-socket ${WALLET_PATH} sign-tx --draft ${draftPath}`;
+      const signCommand = `nockchain-wallet --nockchain-socket ${WALLET_PATH} --draft ${draftPath}`;
       console.log('[STEP 2] Signing draft:', signCommand);
       
       const { stdout: signOutput, stderr: signStderr } = await execAsync(signCommand, {
