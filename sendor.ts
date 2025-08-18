@@ -319,7 +319,7 @@ function buildSimpleSpendCommand(validated: ValidatedSimpleSpendParamsWithUTXOs)
   // Build gifts string: "100,200"
   const giftsStr = validated.gifts.join(',');
   
-  return `${baseCmd} simple-spend --names "[${namesStr}]" --recipients "[${recipientsStr}]" --gifts "${giftsStr}" --fee ${validated.fee}`;
+  return `${baseCmd} create-tx --names "[${namesStr}]" --recipients "[${recipientsStr}]" --gifts "${giftsStr}" --fee ${validated.fee}`;
 }
 
 async function executeCompleteTransaction(simpleSpendCommand: string): Promise<string> {
