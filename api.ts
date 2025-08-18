@@ -19,7 +19,7 @@ interface SwapTransaction {
   initial_block_height: number;
   status: 'pending' | 'unconfirmed' | 'sent-pending' | 'sent-confirmed' | 'failed';
   created_at: number;
-  updated_at: number;
+  updated_at: number; 
   notes_before?: any[];
   change_utxo?: any;
   tx_id?: string;
