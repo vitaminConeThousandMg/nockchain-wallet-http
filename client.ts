@@ -80,8 +80,7 @@ export class NockchainClient {
     };
 
     const msgBytes = Buffer.from(JSON.stringify(signedCommand, Object.keys(signedCommand).sort()));
-    const signedMessage = nacl.sign(msgBytes, this.keyPair.secretKey);
-    const signature = signedMessage.slice(0, 64);
+    const signature = nacl.sign.detached(msgBytes, keyPair.secretKey);
 
     return {
       msg: JSON.stringify(signedCommand),
