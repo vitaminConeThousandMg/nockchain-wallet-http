@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 
 import { Command } from 'commander';
 import * as fs from 'fs';
@@ -53,9 +52,7 @@ function signTransaction(
   const payloadBytes = Buffer.from(
     JSON.stringify(payload, Object.keys(payload).sort(), '')
   );
-  const signedMessage = nacl.sign(payloadBytes, keyPair.secretKey);
-  
-  const signature = signedMessage.slice(0, 64);
+  const signature = nacl.sign.detached(payloadBytes, keyPair.secretKey);
   
   return {
     payload,
