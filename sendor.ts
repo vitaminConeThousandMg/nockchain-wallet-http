@@ -392,7 +392,6 @@ async function executeCompleteTransaction(simpleSpendCommand: string): Promise<s
   }
 }
 
-// Fixed typo: "port" -> "export"
 export async function parseAndBuildCommand(signedCommand: SignedCommand): Promise<string> {
   const { action, params } = signedCommand;
   
@@ -416,7 +415,6 @@ export async function parseAndBuildCommand(signedCommand: SignedCommand): Promis
   throw new Error(`Unknown action: ${action}. Supported: 'simple-spend', 'list-notes', 'list-notes-by-pubkey'`);
 }
 
-// Add missing executeWalletCommand function
 export async function executeWalletCommand(command: string): Promise<string> {
   console.log('[EXECUTING]', command);
   
