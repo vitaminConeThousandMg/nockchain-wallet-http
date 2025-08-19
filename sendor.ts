@@ -339,7 +339,7 @@ async function executeCompleteTransaction(simpleSpendCommand: string): Promise<s
     }
     
     // Extract draft filename from output
-    const draftMatch = draftOutput.match(/draft[_\w]*\.draft/);
+    const draftMatch = draftOutput.match(/tx[_\w]*\.tx/);
     if (!draftMatch) {
       throw new Error('Could not find draft filename in simple-spend output');
     }
